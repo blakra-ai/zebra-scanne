@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Premium, trustworthy palette -->
+    <color name="scanner_primary">#0B2545</color> <!-- Deep navy -->
+    <color name="scanner_primary_variant">#09203A</color>
+    <color name="scanner_onPrimary">#FFFFFF</color>
+
+    <color name="scanner_secondary">#00A896</color> <!-- Teal accent -->
+    <color name="scanner_secondary_variant">#00867A</color>
+    <color name="scanner_onSecondary">#FFFFFF</color>
+
+    <color name="scanner_background">#F6F8FA</color> <!-- Soft light surface -->
+    <color name="scanner_surface">#FFFFFF</color>
+    <color name="scanner_onBackground">#0F1720</color> <!-- Dark text tone -->
+
+    <color name="scanner_muted">#8A98A8</color> <!-- secondary text / UI accents -->
+    <color name="scanner_success">#1EAD63</color>
+    <color name="scanner_warn">#FFB020</color>
+    <color name="scanner_error">#D6453E</color>
+
+    <!-- Overlay and subtle shadow tints -->
+    <color name="scanner_overlay">#660B2545</color>
+    <color name="scanner_scrim">#33000000</color>
+</resources>
