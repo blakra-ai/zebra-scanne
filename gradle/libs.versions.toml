@@ -11,6 +11,7 @@ composeBom = "2025.09.01"
 hilt = "2.57.2"
 hilt-navigation-compose = "1.3.0"
 ksp = "2.2.20-2.0.3"
+sentryAndroidCompose = "7.16.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -30,6 +31,7 @@ androidx-material3 = { group = "androidx.compose.material3", name = "material3" 
 hilt-android = { group = "com.google.dagger", name = "hilt-android", version.ref = "hilt" }
 hilt-compiler = { group = "com.google.dagger", name = "hilt-android-compiler", version.ref = "hilt" }
 androidx-hilt-navigation-compose = { group = "androidx.hilt", name = "hilt-navigation-compose", version.ref = "hilt-navigation-compose" }
+sentry-android-compose = { module = "io.sentry:sentry-android-compose", version.ref = "sentryAndroidCompose" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

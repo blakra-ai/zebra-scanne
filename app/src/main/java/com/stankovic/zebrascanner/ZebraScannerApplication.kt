@@ -9,6 +9,7 @@ import dagger.hilt.android.HiltAndroidApp
 
 @HiltAndroidApp
 class ZebraScannerApplication : Application() {
+
 	private val PROFILE_NAME = "ZebraScannerProfile"
 	private val DW_INTENT = "com.symbol.datawedge.api.ACTION"
 

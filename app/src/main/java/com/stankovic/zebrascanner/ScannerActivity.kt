@@ -12,6 +12,7 @@ import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 import com.stankovic.zebrascanner.config.ScanningConfig
 import com.stankovic.zebrascanner.databinding.ActivityScannerBinding
+import com.stankovic.zebrascanner.presentation.state.StatusType
 import com.stankovic.zebrascanner.scanning.ScanBroadcastReceiver
 import com.stankovic.zebrascanner.viewmodel.ScannerViewModel
 import dagger.hilt.android.AndroidEntryPoint
@@ -30,75 +31,64 @@ class ScannerActivity : ComponentActivity() {
 
         scannerReceiver = ScanBroadcastReceiver(scannerViewModel)
 
+        setupUI()
+    }
 
-
-        // observe scanned data and show it
+    private fun setupUI() {
+        // Observe scanned data
         lifecycleScope.launch {
             scannerViewModel.scannedData.collect { data ->
                 binding.tvScanned.text = data ?: "No scans yet"
             }
         }
-        // observe status and map to colors
+
+        // Observe UI state with proper color coding
         lifecycleScope.launch {
-            scannerViewModel.status.collect { s ->
-                if (s == null) {
-                    binding.tvStatus.text = "Status: Idle"
-                    binding.tvStatus.setTextColor(Color.DKGRAY)
-                } else {
-                    // status shape: "OK: message" | "Warning: message" | "Error: message"
-                    val parts = s.split(":", limit = 2)
-                    val kind = parts.getOrNull(0)?.trim() ?: ""
-                    val msg = parts.getOrNull(1)?.trim() ?: s
-                    when (kind) {
-                        "OK" -> binding.tvStatus.setTextColor(Color.GREEN)
-                        "Warning" -> binding.tvStatus.setTextColor(Color.YELLOW)
-                        "Error" -> binding.tvStatus.setTextColor(Color.RED)
-                        else -> binding.tvStatus.setTextColor(Color.DKGRAY)
-                    }
-                    binding.tvStatus.text = msg
-                }
+            scannerViewModel.uiState.collect { state ->
+                updateStatusUI(state)
             }
         }
 
-        // observe counters and history
+        // Observe counters
         lifecycleScope.launch {
             scannerViewModel.totalScans.collect { total ->
-                val success = scannerViewModel.successCount.value
-                val fail = scannerViewModel.failureCount.value
-                binding.tvCounts.text = "Scans: $total | Success: $success | Fail: $fail"
+                updateCounterDisplay()
             }
         }
 
+        // Observe history
         lifecycleScope.launch {
-            scannerViewModel.history.collect { list ->
-                binding.tvHistory.text = list.joinToString(separator = "\n") { it }
+            scannerViewModel.history.collect { history ->
+                binding.tvHistory.text = history.joinToString(separator = "\n") { it.toString() }
             }
         }
 
-        // populate saved user info
-        val prefs = getSharedPreferences("app_prefs", MODE_PRIVATE)
-        val name = prefs.getString("user_full_name", "-") ?: "-"
-        val email = prefs.getString("user_email", "-") ?: "-"
-        binding.tvUserName.text = "User: $name"
-        binding.tvUserEmail.text = "Email: $email"
+        // Populate user info
 
-        // initialize counters from prefs
-        val total = prefs.getInt("total_scans", 0)
-        val success = prefs.getInt("success_scans", 0)
-        val failure = prefs.getInt("failure_scans", 0)
-        scannerViewModel.setTotals(total, success, failure)
-
+        // Clear history button
         binding.btnClearHistory.setOnClickListener {
-            // clear viewmodel history and reset persisted counts
             scannerViewModel.clearHistory()
-            scannerViewModel.setTotals(0, 0, 0)
-            prefs.edit().putInt("total_scans", 0).putInt("success_scans", 0).putInt("failure_scans", 0).apply()
         }
     }
 
-    private fun showStatus(text: String, color: Int) {
-        binding.tvStatus.text = text
+    private fun updateStatusUI(state: com.stankovic.zebrascanner.presentation.state.ScannerUIState) {
+        binding.tvStatus.text = "Status: ${state.getDisplayMessage()}"
+        
+        val color = when (state.getStatusType()) {
+            StatusType.IDLE -> Color.DKGRAY
+            StatusType.LOADING -> Color.BLUE
+            StatusType.SUCCESS -> Color.GREEN
+            StatusType.WARNING -> Color.YELLOW
+            StatusType.ERROR -> Color.RED
+        }
         binding.tvStatus.setTextColor(color)
+    }
+
+    private fun updateCounterDisplay() {
+        val total = scannerViewModel.totalScans.value
+        val success = scannerViewModel.successCount.value
+        val fail = scannerViewModel.failureCount.value
+        binding.tvCounts.text = "Scans: $total | Success: $success | Fail: $fail"
     }
 
     @SuppressLint("UnspecifiedRegisterReceiverFlag")

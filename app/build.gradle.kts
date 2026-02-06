@@ -6,6 +6,7 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.hilt)
     alias(libs.plugins.ksp)
+    id("io.sentry.android.gradle") version "6.0.0"
 }
 
 android {
@@ -49,6 +50,16 @@ android {
     }
 }
 
+sentry {
+    org.set("your-sentry-org")
+    projectName.set("zebra-scanner")
+    authToken.set(System.getenv("SENTRY_AUTH_TOKEN"))
+    // For automatic error reporting
+    tracingInstrumentation {
+        enabled.set(true)
+    }
+}
+
 dependencies {
     implementation("androidx.core:core:1.17.0")
     implementation("androidx.constraintlayout:constraintlayout:2.2.1")
@@ -79,4 +90,5 @@ dependencies {
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
     ksp(libs.hilt.compiler)
+
 }
