@@ -19,6 +19,11 @@ jobs:
         continue-on-error: true
         working-directory: ${{ matrix.p }}
         run: chmod +x gradlew && ./gradlew assembleDebug --no-daemon 2>&1 | tail -60 | tee ../build-log.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: APK-${{ matrix.p }}
+          path: ${{ matrix.p }}/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: ignore
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules

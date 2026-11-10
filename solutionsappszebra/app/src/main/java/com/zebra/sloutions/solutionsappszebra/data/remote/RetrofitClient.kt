@@ -6,7 +6,7 @@ import retrofit2.converter.gson.GsonConverterFactory
 
 object RetrofitClient {
 
-    private const val BASE_URL = "https://your.api.base.url/"
+    private const val BASE_URL = "https://luna-api.solutions-apps.com/"
 
     val apiService: ApiService by lazy {
         Retrofit.Builder()

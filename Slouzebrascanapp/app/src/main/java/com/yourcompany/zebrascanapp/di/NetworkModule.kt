@@ -18,7 +18,7 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 object NetworkModule {
 
-    private const val BASE_URL = "https://luna-admin-dev.solutions-apps.com/"
+    private const val BASE_URL = "https://luna-api.solutions-apps.com/"
 
     @Provides
     @Singleton
