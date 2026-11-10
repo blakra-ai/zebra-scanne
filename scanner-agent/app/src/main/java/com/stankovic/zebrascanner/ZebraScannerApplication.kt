@@ -36,31 +36,44 @@ class ZebraScannerApplication : Application() {
 		val config = Bundle().apply {
 			putString("PROFILE_NAME", PROFILE_NAME)
 			putString("PROFILE_ENABLED", "true")
-			putString("CONFIG_MODE", "UPDATE")
+			putString("CONFIG_MODE", "CREATE_IF_NOT_EXIST")
 
 			// Configure barcode plugin
 			val barcodePlugin = Bundle().apply {
 				putString("PLUGIN_NAME", "BARCODE")
+				putString("RESET_CONFIG", "true")
 				val barcodeProps = Bundle().apply {
 					putString("scanner_selection", "auto")
 					putString("scanner_input_enabled", "true")
 				}
 				putBundle("PARAM_LIST", barcodeProps)
 			}
-			putParcelableArray("PLUGIN_CONFIG", arrayOf(barcodePlugin))
 
-			// Configure intent output to this app
-			val intentOutput = Bundle().apply {
-				putString("intent_output_enabled", "true")
-				putString("intent_action", ScanningConfig.APP_SCANNER_INTENT)
-				putString("intent_delivery", "2") // Broadcast
+			// Intent output must be its own plugin inside PLUGIN_CONFIG, otherwise DataWedge ignores it
+			val intentPlugin = Bundle().apply {
+				putString("PLUGIN_NAME", "INTENT")
+				putString("RESET_CONFIG", "true")
+				val intentProps = Bundle().apply {
+					putString("intent_output_enabled", "true")
+					putString("intent_action", ScanningConfig.APP_SCANNER_INTENT)
+					putString("intent_category", "android.intent.category.DEFAULT")
+					putString("intent_delivery", "2") // Broadcast
+				}
+				putBundle("PARAM_LIST", intentProps)
 			}
-			putBundle("INTENT", intentOutput)
 
-			// Associate this app with the profile
+			// Stop DataWedge from also typing the barcode as keystrokes
+			val keystrokePlugin = Bundle().apply {
+				putString("PLUGIN_NAME", "KEYSTROKE")
+				putString("RESET_CONFIG", "true")
+				putBundle("PARAM_LIST", Bundle().apply { putString("keystroke_output_enabled", "false") })
+			}
+			putParcelableArray("PLUGIN_CONFIG", arrayOf(barcodePlugin, intentPlugin, keystrokePlugin))
+
+			// Associate this app (all activities) with the profile
 			val appConfig = Bundle().apply {
 				putString("PACKAGE_NAME", packageName)
-				putStringArray("ACTIVITY_LIST", arrayOf(""))
+				putStringArray("ACTIVITY_LIST", arrayOf("*"))
 			}
 			putParcelableArray("APP_LIST", arrayOf(appConfig))
 		}

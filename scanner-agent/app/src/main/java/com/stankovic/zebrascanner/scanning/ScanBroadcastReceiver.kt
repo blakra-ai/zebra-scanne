@@ -87,7 +87,11 @@ class ScanBroadcastReceiver : BroadcastReceiver {
 
                     val response = apiService.markShipped(authHeader, com.stankovic.zebrascanner.network.MarkShippedRequest(tn))
                     if (!response.isSuccessful) {
-
+                        val err = "Server returned ${response.code()}"
+                        Log.w("ScanReceiver", "$tn: $err")
+                        scannerViewModel?.incrementTotal()
+                        scannerViewModel?.updateStatus("Error: $err")
+                        withContext(Dispatchers.Main) { Toast.makeText(context, "$tn: $err", Toast.LENGTH_LONG).show() }
                         return@launch
                     }
 
