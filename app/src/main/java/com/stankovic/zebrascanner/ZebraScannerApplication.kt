@@ -10,7 +10,7 @@ import dagger.hilt.android.HiltAndroidApp
 @HiltAndroidApp
 class ZebraScannerApplication : Application() {
 
-	private val PROFILE_NAME = "ZebraScannerProfile"
+	private val PROFILE_NAME = ScanningConfig.DATAWEDGE_PROFILE
 	private val DW_INTENT = "com.symbol.datawedge.api.ACTION"
 
 	override fun onCreate() {
@@ -22,7 +22,8 @@ class ZebraScannerApplication : Application() {
 		}
 	}
 
-	private fun configureDataWedgeProfile() {
+	/** Creates or repairs the DataWedge profile; also called when the scanner check finds it inactive. */
+	fun configureDataWedgeProfile() {
 		// Build config bundle according to DataWedge API
 		val config = Bundle().apply {
 			putString("PROFILE_NAME", PROFILE_NAME)

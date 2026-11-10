@@ -22,6 +22,9 @@ import java.net.SocketTimeoutException
 
 class ScanBroadcastReceiver : BroadcastReceiver {
     private var scannerViewModel: ScannerViewModel? = null
+
+    /** Called when a barcode genuinely arrives from DataWedge (proves the scanner -> app link works). */
+    var onHardwareScan: (() -> Unit)? = null
     constructor()
     private val apiService by lazy {
         ApiClient.createApiService()
@@ -77,6 +80,7 @@ class ScanBroadcastReceiver : BroadcastReceiver {
             tracking = decodedData ?: tracking
         }
 
+        onHardwareScan?.invoke()
         tracking?.trim()?.takeIf { it.isNotEmpty() }?.let { submit(context, it) }
     }
 

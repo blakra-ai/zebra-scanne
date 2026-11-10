@@ -3,6 +3,7 @@ package com.stankovic.zebrascanner
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.res.ColorStateList
 import android.graphics.Color
 import android.net.ConnectivityManager
 import android.net.Network
@@ -19,6 +20,7 @@ import kotlinx.coroutines.launch
 import com.stankovic.zebrascanner.config.ScanningConfig
 import com.stankovic.zebrascanner.databinding.ActivityScannerBinding
 import com.stankovic.zebrascanner.presentation.state.StatusType
+import com.stankovic.zebrascanner.scanning.DataWedgeMonitor
 import com.stankovic.zebrascanner.scanning.ScanBroadcastReceiver
 import com.stankovic.zebrascanner.viewmodel.ScannerViewModel
 import com.journeyapps.barcodescanner.ScanContract
@@ -31,6 +33,8 @@ class ScannerActivity : ComponentActivity() {
     private lateinit var scannerReceiver: ScanBroadcastReceiver
     private var isReceiverRegistered = false
     private lateinit var binding: ActivityScannerBinding
+    private lateinit var dataWedgeMonitor: DataWedgeMonitor
+    private var lastScannerHealth: DataWedgeMonitor.ScannerHealth? = null
 
     // Camera fallback for when the hardware scanner/DataWedge isn't available
     private val cameraScanLauncher = registerForActivityResult(ScanContract()) { result ->
@@ -45,6 +49,9 @@ class ScannerActivity : ComponentActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         scannerReceiver = ScanBroadcastReceiver(scannerViewModel)
+        dataWedgeMonitor = DataWedgeMonitor(this, ScanningConfig.DATAWEDGE_PROFILE, ::showScannerHealth)
+        scannerReceiver.onHardwareScan = { runOnUiThread { dataWedgeMonitor.onScanReceived() } }
+        binding.tvScannerHealth.setOnClickListener { onScannerHealthTapped() }
 
         setupUI()
     }
@@ -187,11 +194,13 @@ class ScannerActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         registerScannerReceiver()
+        dataWedgeMonitor.start()
     }
 
     override fun onPause() {
         super.onPause()
         unregisterScannerReceiver()
+        dataWedgeMonitor.stop()
     }
 
     // ---------- Connection banner ----------
@@ -213,13 +222,41 @@ class ScannerActivity : ComponentActivity() {
     }
 
     private fun showConnection(online: Boolean) {
-        if (online) {
-            binding.tvConnection.text = "● Online — ready to scan"
-            binding.tvConnection.setBackgroundColor(Color.parseColor("#2E7D32"))
-        } else {
-            binding.tvConnection.text = "● No connection — scans will NOT be marked"
-            binding.tvConnection.setBackgroundColor(Color.parseColor("#C62828"))
+        binding.tvNetwork.text = if (online) "● Online" else "● Offline"
+        binding.tvNetwork.backgroundTintList =
+            ColorStateList.valueOf(Color.parseColor(if (online) GREEN else RED))
+    }
+
+    // ---------- Hardware scanner (DataWedge) health ----------
+
+    private fun showScannerHealth(health: DataWedgeMonitor.ScannerHealth) {
+        val color = when (health.level) {
+            DataWedgeMonitor.Level.CHECKING -> GREY
+            DataWedgeMonitor.Level.OK -> GREEN
+            DataWedgeMonitor.Level.WARNING -> AMBER
+            DataWedgeMonitor.Level.ERROR -> RED
+            DataWedgeMonitor.Level.UNAVAILABLE -> GREY
         }
+        binding.tvScannerHealth.text = "● ${health.title}"
+        binding.tvScannerHealth.backgroundTintList = ColorStateList.valueOf(Color.parseColor(color))
+        binding.tvScannerHealth.setTextColor(
+            if (health.level == DataWedgeMonitor.Level.WARNING) Color.BLACK else Color.WHITE
+        )
+        // Only show the explanation line when something needs attention
+        val showDetail = health.level == DataWedgeMonitor.Level.WARNING ||
+            health.level == DataWedgeMonitor.Level.ERROR ||
+            health.level == DataWedgeMonitor.Level.UNAVAILABLE
+        binding.tvScannerDetail.text = health.detail
+        binding.tvScannerDetail.visibility = if (showDetail) android.view.View.VISIBLE else android.view.View.GONE
+        lastScannerHealth = health
+    }
+
+    private fun onScannerHealthTapped() {
+        if (lastScannerHealth?.level == DataWedgeMonitor.Level.WARNING) {
+            // Profile not active: re-apply it, then check again
+            (application as? ZebraScannerApplication)?.configureDataWedgeProfile()
+        }
+        dataWedgeMonitor.check()
     }
 
     override fun onStart() {
@@ -238,5 +275,12 @@ class ScannerActivity : ComponentActivity() {
             connectivityManager?.unregisterNetworkCallback(networkCallback)
         } catch (_: Exception) {
         }
+    }
+
+    private companion object {
+        const val GREEN = "#2E7D32"
+        const val RED = "#C62828"
+        const val AMBER = "#F9A825"
+        const val GREY = "#757575"
     }
 }

@@ -6,6 +6,11 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.VIBRATE" />
 
+    <!-- Lets the app see whether DataWedge (Zebra scanner service) is installed on Android 11+ -->
+    <queries>
+        <package android:name="com.symbol.datawedge" />
+    </queries>
+
     <permission
         android:name="com.stankovic.zebrascanner.SCAN_PERMISSION"
         android:protectionLevel="signature" />
