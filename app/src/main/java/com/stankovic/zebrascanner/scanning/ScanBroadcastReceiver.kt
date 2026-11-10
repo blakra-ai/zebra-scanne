@@ -75,11 +75,22 @@ class ScanBroadcastReceiver : BroadcastReceiver {
             tracking = decodedData ?: tracking
         }
 
-        tracking?.let { submit(context, it) }
+        tracking?.trim()?.takeIf { it.isNotEmpty() }?.let { submit(context, it) }
     }
 
     /** Sends a tracking number to the backend; shared by DataWedge, manual entry and camera scans. */
     fun submit(context: Context, tn: String) {
+        // Ignore the same code fired twice in quick succession (double trigger press / duplicate broadcast)
+        val now = System.currentTimeMillis()
+        synchronized(Companion) {
+            if (tn == lastCode && now - lastCodeAt < DUPLICATE_WINDOW_MS) {
+                Log.d("ScanReceiver", "Ignoring duplicate scan of $tn")
+                return
+            }
+            lastCode = tn
+            lastCodeAt = now
+        }
+        val appContext = context.applicationContext
         run {
             // update viewmodel if available
             scannerViewModel?.updateScannedData(tn)
@@ -90,15 +101,10 @@ class ScanBroadcastReceiver : BroadcastReceiver {
                     // get token from prefs if available
                     val prefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
                     val token = prefs.getString("auth_token", null)
-                    Log.d("ScanReceiver", "token: $token, response: ")
 
                     val authHeader = if (!token.isNullOrEmpty()) "Bearer $token" else null
 
                     val response = apiService.markShipped(authHeader, com.stankovic.zebrascanner.network.MarkShippedRequest(tn))
-val contentType = response.headers()["Content-Type"] ?: ""
-if (!contentType.contains("application/json")) {
-    throw IllegalStateException("Non-JSON response received (likely auth redirect)")
-}
                     Log.d("ScanReceiver", "response: $response, response: ")
 
                     // increment persistent total
@@ -114,6 +120,7 @@ if (!contentType.contains("application/json")) {
 
                         prefs.edit().putInt("success_scans", prefs.getInt("success_scans", 0) + 1).apply()
                         scannerViewModel?.incrementSuccess()
+                        ScanFeedback.success(appContext)
                         scannerViewModel?.updateStatus("OK: $msg")
                         scannerViewModel?.addHistoryEntry(HistoryEntry(tn, StatusType.SUCCESS, msg))
                         if (scannerViewModel == null) {
@@ -125,6 +132,22 @@ if (!contentType.contains("application/json")) {
                         Log.d("ScanReceiver", "err: $err, response: ")
 
                         when (response.code()) {
+                            401 -> {
+                                // Token expired or revoked: clear it and send the user back to login
+                                prefs.edit().remove("auth_token").apply()
+                                prefs.edit().putInt("failure_scans", prefs.getInt("failure_scans", 0) + 1).apply()
+                                scannerViewModel?.incrementFailure()
+                                scannerViewModel?.updateStatus("Error: Session expired, please log in again")
+                                scannerViewModel?.addHistoryEntry(HistoryEntry(tn, StatusType.ERROR, "Session expired — not marked"))
+                                ScanFeedback.failure(appContext)
+                                withContext(Dispatchers.Main) {
+                                    Toast.makeText(context, "Session expired, please log in again", Toast.LENGTH_LONG).show()
+                                    context.startActivity(
+                                        Intent(context, com.stankovic.zebrascanner.login_form::class.java)
+                                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+                                    )
+                                }
+                            }
                             422 -> {
                                 // try to parse tracking_number array
                                         try {
@@ -133,12 +156,14 @@ if (!contentType.contains("application/json")) {
                                             val msg = if (arr != null && arr.length() > 0) arr.getString(0) else "Invalid tracking number."
                                     prefs.edit().putInt("failure_scans", prefs.getInt("failure_scans", 0) + 1).apply()
                                     scannerViewModel?.incrementFailure()
+                                    ScanFeedback.failure(appContext)
                                     scannerViewModel?.updateStatus("Warning: $msg")
                                     scannerViewModel?.addHistoryEntry(HistoryEntry(tn, StatusType.WARNING, msg))
                                     if (scannerViewModel == null) withContext(Dispatchers.Main) { Toast.makeText(context, msg, Toast.LENGTH_LONG).show() }
                                 } catch (e: Exception) {
                                     prefs.edit().putInt("failure_scans", prefs.getInt("failure_scans", 0) + 1).apply()
                                     scannerViewModel?.incrementFailure()
+                                    ScanFeedback.failure(appContext)
                                     scannerViewModel?.updateStatus("Warning: Validation error")
                                     scannerViewModel?.addHistoryEntry(HistoryEntry(tn, StatusType.WARNING, "Validation error"))
                                     if (scannerViewModel == null) withContext(Dispatchers.Main) { Toast.makeText(context, "Validation error", Toast.LENGTH_LONG).show() }
@@ -150,6 +175,7 @@ if (!contentType.contains("application/json")) {
 
                                 prefs.edit().putInt("failure_scans", prefs.getInt("failure_scans", 0) + 1).apply()
                                 scannerViewModel?.incrementFailure()
+                                ScanFeedback.failure(appContext)
                                 scannerViewModel?.updateStatus("Error: $msg")
                                 scannerViewModel?.addHistoryEntry(HistoryEntry(tn, StatusType.ERROR, msg))
                                 if (scannerViewModel == null) withContext(Dispatchers.Main) { Toast.makeText(context, msg, Toast.LENGTH_LONG).show() }
@@ -160,6 +186,7 @@ if (!contentType.contains("application/json")) {
 
                                 prefs.edit().putInt("failure_scans", prefs.getInt("failure_scans", 0) + 1).apply()
                                 scannerViewModel?.incrementFailure()
+                                ScanFeedback.failure(appContext)
                                 scannerViewModel?.updateStatus("Error: $msg")
                                 scannerViewModel?.addHistoryEntry(HistoryEntry(tn, StatusType.ERROR, msg))
                                 if (scannerViewModel == null) withContext(Dispatchers.Main) { Toast.makeText(context, msg, Toast.LENGTH_LONG).show() }
@@ -172,11 +199,18 @@ if (!contentType.contains("application/json")) {
 
                     prefs.edit().putInt("failure_scans", prefs.getInt("failure_scans", 0) + 1).apply()
                     scannerViewModel?.incrementFailure()
+                    ScanFeedback.failure(appContext)
                     scannerViewModel?.updateStatus("Error: ${e.message}")
                     scannerViewModel?.addHistoryEntry(HistoryEntry(tn, StatusType.ERROR, e.message ?: "Network error"))
                     if (scannerViewModel == null) withContext(Dispatchers.Main) { Toast.makeText(context, e.message ?: "Network error", Toast.LENGTH_LONG).show() }
                 }
             }
         }
+    }
+
+    companion object {
+        private const val DUPLICATE_WINDOW_MS = 2000L
+        private var lastCode: String? = null
+        private var lastCodeAt = 0L
     }
 }

@@ -6,6 +6,7 @@ import android.content.IntentFilter
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
+import android.view.WindowManager
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import androidx.activity.ComponentActivity
@@ -37,6 +38,8 @@ class ScannerActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityScannerBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        // Scanner stays in use for a whole shift; don't let the screen sleep between parcels
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         scannerReceiver = ScanBroadcastReceiver(scannerViewModel)
 
@@ -77,6 +80,15 @@ class ScannerActivity : ComponentActivity() {
         // Clear history button
         binding.btnClearHistory.setOnClickListener {
             scannerViewModel.clearHistory()
+        }
+
+        binding.btnLogout.setOnClickListener {
+            getSharedPreferences("app_prefs", MODE_PRIVATE).edit().remove("auth_token").apply()
+            startActivity(
+                Intent(this, login_form::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+            )
+            finish()
         }
 
         binding.btnSubmitManual.setOnClickListener { submitManualEntry() }

@@ -10,6 +10,7 @@ import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
+import java.util.concurrent.TimeUnit
 import javax.inject.Singleton
 
 /**
@@ -25,7 +26,9 @@ class ApiClient @Singleton constructor(
             return HttpLoggingInterceptor { message ->
                 Log.d("HTTP", message)
             }.apply {
-                level = HttpLoggingInterceptor.Level.BODY
+                // BODY would write passwords and tokens to logcat; keep it to request lines
+                level = HttpLoggingInterceptor.Level.BASIC
+                redactHeader("Authorization")
             }
         }
 
@@ -42,6 +45,11 @@ class ApiClient @Singleton constructor(
 
         private fun createOkHttpClient(): OkHttpClient {
             return OkHttpClient.Builder()
+                // Warehouse Wi-Fi can be slow; fail fast enough that the operator can rescan
+                .connectTimeout(10, TimeUnit.SECONDS)
+                .readTimeout(15, TimeUnit.SECONDS)
+                .writeTimeout(15, TimeUnit.SECONDS)
+                .retryOnConnectionFailure(true)
                 .addInterceptor(createLoggingInterceptor())
                 .addInterceptor(createHeaderInterceptor())
                 .build()

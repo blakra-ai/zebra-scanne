@@ -34,14 +34,11 @@ class login_form : AppCompatActivity() {
         setContentView(bind.root)
         val prefs = this.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
         val token = prefs.getString("auth_token", null)
-        token?.length?.let {
-            if(it>100) {
-                startActivity(Intent(this, ScannerActivity::class.java))
-                finish()
-                return
-            }
+        if (!token.isNullOrBlank()) {
+            startActivity(Intent(this, ScannerActivity::class.java))
+            finish()
+            return
         }
-        Log.d("ScanReceiver", "token: $token, response: ")
 
         bind.btnLogin.setOnClickListener {
             username = bind.logtxt.text.toString().trim()
@@ -78,7 +75,7 @@ class login_form : AppCompatActivity() {
 
                 if (!resp.isSuccessful) {
                     val message = parseErrorMessage(resp)
-                    Toast.makeText(this@login_form, message, Toast.LENGTH_LONG).show()
+                    showError(message)
                     return@launch
                 }
 
@@ -91,11 +88,11 @@ class login_form : AppCompatActivity() {
                 val prefs = getSharedPreferences("app_prefs", MODE_PRIVATE)
                 val token = loginResp.data.token
 
-                prefs.edit().apply {
-                    token?.let { putString("auth_token", it) }
-
-                    apply()
+                if (token.isNullOrBlank()) {
+                    showError(loginResp.data.message ?: "Login failed: no token received")
+                    return@launch
                 }
+                prefs.edit().putString("auth_token", token).apply()
 
                 Toast.makeText(this@login_form, "Login successful", Toast.LENGTH_SHORT).show()
                 startActivity(Intent(this@login_form, ScannerActivity::class.java))
