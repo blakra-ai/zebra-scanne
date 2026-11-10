@@ -33,17 +33,22 @@ class ScanBroadcastReceiver : BroadcastReceiver {
         val allowedSender = "com.symbol.datawedge"
         var validatedSender = false
         try {
-            val senderUid = getSendingUid()
-            val senderPkgs = context.packageManager.getPackagesForUid(senderUid)
-            if (senderPkgs != null && senderPkgs.contains(allowedSender)) {
-                validatedSender = true
+            // sentFromUid exists only on Android 14+ and is -1 unless the sender opts in
+            if (android.os.Build.VERSION.SDK_INT >= 34) {
+                val senderUid = sentFromUid
+                if (senderUid >= 0) {
+                    val senderPkgs = context.packageManager.getPackagesForUid(senderUid)
+                    if (senderPkgs != null && senderPkgs.contains(allowedSender)) {
+                        validatedSender = true
+                    }
+                }
             }
         } catch (e: Exception) {
             Log.w("ScanReceiver", "Sender validation exception: ${e.message}")
         }
         if (!validatedSender) {
             // Fallback checks: intent.package or known DataWedge extras (best-effort)
-            val senderPkg = intent.package
+            val senderPkg = intent.`package`
             if (senderPkg == allowedSender) validatedSender = true
             val sourceExtra = intent.getStringExtra("com.symbol.datawedge.source")
             if (!validatedSender && sourceExtra == "scanner") validatedSender = true
