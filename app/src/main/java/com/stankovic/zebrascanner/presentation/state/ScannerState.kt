@@ -51,7 +51,17 @@ data class HistoryEntry(
     val trackingNumber: String,
     val status: StatusType,
     val message: String,
+    val orderNumber: String? = null,
     val timestamp: Long = System.currentTimeMillis()
 ) {
-    override fun toString(): String = "$trackingNumber — ${status.name}: $message"
+    override fun toString(): String {
+        val icon = when (status) {
+            StatusType.SUCCESS -> "✔"
+            StatusType.WARNING -> "⚠"
+            else -> "✖"
+        }
+        val time = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US).format(java.util.Date(timestamp))
+        val order = orderNumber?.let { "  •  Order $it" } ?: ""
+        return "$icon $time  $trackingNumber$order\n    $message"
+    }
 }

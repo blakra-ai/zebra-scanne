@@ -95,6 +95,10 @@ class ScannerViewModel @Inject constructor(
         _scannedData.value = data
     }
 
+    fun markProcessing(trackingNumber: String) {
+        _uiState.value = ScannerUIState.Loading
+    }
+
     fun updateStatus(text: String) {
         _status.value = text
         // Parse status for new sealed state

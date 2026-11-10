@@ -14,8 +14,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.stankovic.zebrascanner.network.ApiClient
+import com.stankovic.zebrascanner.network.MarkShippedRequest
+import kotlinx.coroutines.CancellationException
 import org.json.JSONObject
-import org.json.JSONArray
+import java.io.IOException
+import java.net.SocketTimeoutException
 
 class ScanBroadcastReceiver : BroadcastReceiver {
     private var scannerViewModel: ScannerViewModel? = null
@@ -66,7 +69,6 @@ class ScanBroadcastReceiver : BroadcastReceiver {
             val data = it.getStringExtra("com.symbol.datawedge.data_string")
             val labelType = it.getStringExtra("com.symbol.datawedge.label_type")
             Log.d("ScanReceiver", "Data: $data, Type: $labelType")
-            Toast.makeText(context, "Scanned: $data ($labelType)", Toast.LENGTH_SHORT).show()
             tracking = it.getStringExtra(ScanningConfig.ZEBRA_SCANNER_INTENT) ?: data
         }
 
@@ -91,120 +93,108 @@ class ScanBroadcastReceiver : BroadcastReceiver {
             lastCodeAt = now
         }
         val appContext = context.applicationContext
-        run {
-            // update viewmodel if available
-            scannerViewModel?.updateScannedData(tn)
+        scannerViewModel?.updateScannedData(tn)
+        scannerViewModel?.markProcessing(tn)
 
-            // call backend to mark shipped via Retrofit + Coroutines
-            CoroutineScope(Dispatchers.IO).launch {
-                try {
-                    // get token from prefs if available
-                    val prefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
-                    val token = prefs.getString("auth_token", null)
-
-                    val authHeader = if (!token.isNullOrEmpty()) "Bearer $token" else null
-
-                    val response = apiService.markShipped(authHeader, com.stankovic.zebrascanner.network.MarkShippedRequest(tn))
-                    Log.d("ScanReceiver", "response: $response, response: ")
-
-                    // increment persistent total
-                    val totalPref = prefs.getInt("total_scans", 0) + 1
-                    prefs.edit().putInt("total_scans", totalPref).apply()
-                    scannerViewModel?.incrementTotal()
-
-                    if (response.code() in 200..299) {
-                            val markResp = response.body()
-                        val msg = markResp?.data?.get("message") as? String ?: "Order has been marked as shipped."
-                        // success
-                        Log.d("ScanReceiver", "msg: $msg, response: ")
-
-                        prefs.edit().putInt("success_scans", prefs.getInt("success_scans", 0) + 1).apply()
-                        scannerViewModel?.incrementSuccess()
-                        ScanFeedback.success(appContext)
-                        scannerViewModel?.updateStatus("OK: $msg")
-                        scannerViewModel?.addHistoryEntry(HistoryEntry(tn, StatusType.SUCCESS, msg))
-                        if (scannerViewModel == null) {
-                            withContext(Dispatchers.Main) { Toast.makeText(context, msg, Toast.LENGTH_LONG).show() }
+        CoroutineScope(Dispatchers.IO).launch {
+            val prefs = appContext.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+            val outcome = try {
+                val token = prefs.getString("auth_token", null)
+                val authHeader = if (!token.isNullOrEmpty()) "Bearer $token" else null
+                val response = apiService.markShipped(authHeader, MarkShippedRequest(tn))
+                Log.d("ScanReceiver", "mark-shipped $tn -> ${response.code()}")
+                if (response.isSuccessful) {
+                    val data = response.body()?.data
+                    ScanOutcome(
+                        StatusType.SUCCESS,
+                        data?.get("message") as? String ?: "Packing has been marked as shipped.",
+                        orderNumber = when (val n = data?.get("order_number")) {
+                            // Gson reads JSON numbers inside Map<String, Any> as Double (123 -> 123.0)
+                            is Double -> if (n % 1.0 == 0.0) n.toLong().toString() else n.toString()
+                            null -> null
+                            else -> n.toString()
                         }
-                    } else {
-                        // read error body
-                        val err = response.errorBody()?.string() ?: "Server returned ${response.code()}"
-                        Log.d("ScanReceiver", "err: $err, response: ")
+                    )
+                } else {
+                    outcomeForError(response.code(), response.errorBody()?.string())
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: SocketTimeoutException) {
+                ScanOutcome(StatusType.ERROR, "Server did not respond in time. Check the order before scanning again.")
+            } catch (e: IOException) {
+                ScanOutcome(StatusType.ERROR, "No connection to the server. Not marked — scan again.")
+            } catch (e: Exception) {
+                Log.e("ScanReceiver", "Unexpected error for $tn", e)
+                ScanOutcome(StatusType.ERROR, "Unexpected error: ${e.message ?: e.javaClass.simpleName}")
+            }
 
-                        when (response.code()) {
-                            401 -> {
-                                // Token expired or revoked: clear it and send the user back to login
-                                prefs.edit().remove("auth_token").apply()
-                                prefs.edit().putInt("failure_scans", prefs.getInt("failure_scans", 0) + 1).apply()
-                                scannerViewModel?.incrementFailure()
-                                scannerViewModel?.updateStatus("Error: Session expired, please log in again")
-                                scannerViewModel?.addHistoryEntry(HistoryEntry(tn, StatusType.ERROR, "Session expired — not marked"))
-                                ScanFeedback.failure(appContext)
-                                withContext(Dispatchers.Main) {
-                                    Toast.makeText(context, "Session expired, please log in again", Toast.LENGTH_LONG).show()
-                                    context.startActivity(
-                                        Intent(context, com.stankovic.zebrascanner.login_form::class.java)
-                                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
-                                    )
-                                }
-                            }
-                            422 -> {
-                                // try to parse tracking_number array
-                                        try {
-                                            val j = JSONObject(err)
-                                            val arr = if (j.has("tracking_number")) j.optJSONArray("tracking_number") else null
-                                            val msg = if (arr != null && arr.length() > 0) arr.getString(0) else "Invalid tracking number."
-                                    prefs.edit().putInt("failure_scans", prefs.getInt("failure_scans", 0) + 1).apply()
-                                    scannerViewModel?.incrementFailure()
-                                    ScanFeedback.failure(appContext)
-                                    scannerViewModel?.updateStatus("Warning: $msg")
-                                    scannerViewModel?.addHistoryEntry(HistoryEntry(tn, StatusType.WARNING, msg))
-                                    if (scannerViewModel == null) withContext(Dispatchers.Main) { Toast.makeText(context, msg, Toast.LENGTH_LONG).show() }
-                                } catch (e: Exception) {
-                                    prefs.edit().putInt("failure_scans", prefs.getInt("failure_scans", 0) + 1).apply()
-                                    scannerViewModel?.incrementFailure()
-                                    ScanFeedback.failure(appContext)
-                                    scannerViewModel?.updateStatus("Warning: Validation error")
-                                    scannerViewModel?.addHistoryEntry(HistoryEntry(tn, StatusType.WARNING, "Validation error"))
-                                    if (scannerViewModel == null) withContext(Dispatchers.Main) { Toast.makeText(context, "Validation error", Toast.LENGTH_LONG).show() }
-                                }
-                            }
-                            409 -> {
-                                        val msg = try { JSONObject(err).optJSONObject("data")?.optString("message") ?: "This order has already been shipped." } catch (_: Exception) { "This order has already been shipped." }
-                                Log.d("ScanReceiver", "409: $msg, response: ")
+            // Persist and show the result
+            prefs.edit()
+                .putInt("total_scans", prefs.getInt("total_scans", 0) + 1)
+                .apply {
+                    if (outcome.status == StatusType.SUCCESS) putInt("success_scans", prefs.getInt("success_scans", 0) + 1)
+                    else putInt("failure_scans", prefs.getInt("failure_scans", 0) + 1)
+                }
+                .apply()
+            scannerViewModel?.incrementTotal()
+            if (outcome.status == StatusType.SUCCESS) {
+                scannerViewModel?.incrementSuccess()
+                ScanFeedback.success(appContext)
+            } else {
+                scannerViewModel?.incrementFailure()
+                ScanFeedback.failure(appContext)
+            }
+            val label = when (outcome.status) {
+                StatusType.SUCCESS -> "OK"
+                StatusType.WARNING -> "Warning"
+                else -> "Error"
+            }
+            val shown = outcome.orderNumber?.let { "${outcome.message} (Order $it)" } ?: outcome.message
+            scannerViewModel?.updateStatus("$label: $shown")
+            scannerViewModel?.addHistoryEntry(HistoryEntry(tn, outcome.status, outcome.message, outcome.orderNumber))
 
-                                prefs.edit().putInt("failure_scans", prefs.getInt("failure_scans", 0) + 1).apply()
-                                scannerViewModel?.incrementFailure()
-                                ScanFeedback.failure(appContext)
-                                scannerViewModel?.updateStatus("Error: $msg")
-                                scannerViewModel?.addHistoryEntry(HistoryEntry(tn, StatusType.ERROR, msg))
-                                if (scannerViewModel == null) withContext(Dispatchers.Main) { Toast.makeText(context, msg, Toast.LENGTH_LONG).show() }
-                            }
-                            else -> {
-                                val msg = "Server returned ${response.code()}"
-                                Log.d("ScanReceiver", "returned: $msg, response: ")
-
-                                prefs.edit().putInt("failure_scans", prefs.getInt("failure_scans", 0) + 1).apply()
-                                scannerViewModel?.incrementFailure()
-                                ScanFeedback.failure(appContext)
-                                scannerViewModel?.updateStatus("Error: $msg")
-                                scannerViewModel?.addHistoryEntry(HistoryEntry(tn, StatusType.ERROR, msg))
-                                if (scannerViewModel == null) withContext(Dispatchers.Main) { Toast.makeText(context, msg, Toast.LENGTH_LONG).show() }
-                            }
-                        }
-                    }
-                } catch (e: Exception) {
-                    val prefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
-                    Log.d("ScanReceiver", "Exception: Exception, response: ")
-
-                    prefs.edit().putInt("failure_scans", prefs.getInt("failure_scans", 0) + 1).apply()
-                    scannerViewModel?.incrementFailure()
-                    ScanFeedback.failure(appContext)
-                    scannerViewModel?.updateStatus("Error: ${e.message}")
-                    scannerViewModel?.addHistoryEntry(HistoryEntry(tn, StatusType.ERROR, e.message ?: "Network error"))
-                    if (scannerViewModel == null) withContext(Dispatchers.Main) { Toast.makeText(context, e.message ?: "Network error", Toast.LENGTH_LONG).show() }
+            withContext(Dispatchers.Main) {
+                if (scannerViewModel == null) Toast.makeText(appContext, shown, Toast.LENGTH_LONG).show()
+                if (outcome.sessionExpired) {
+                    prefs.edit().remove("auth_token").apply()
+                    Toast.makeText(appContext, "Session expired, please log in again", Toast.LENGTH_LONG).show()
+                    appContext.startActivity(
+                        Intent(appContext, com.stankovic.zebrascanner.login_form::class.java)
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+                    )
                 }
             }
+        }
+    }
+
+    private data class ScanOutcome(
+        val status: StatusType,
+        val message: String,
+        val orderNumber: String? = null,
+        val sessionExpired: Boolean = false
+    )
+
+    /**
+     * Maps backend error responses to a user-facing outcome. Backend shapes:
+     * - business errors (incl. "already shipped", sent as 400 not 409): {"data":{"message":"..."}}
+     * - validation 422: {"tracking_number":["..."]}
+     * - 401/403 from Laravel: {"message":"..."}
+     */
+    private fun outcomeForError(code: Int, body: String?): ScanOutcome {
+        val json = try { body?.let { JSONObject(it) } } catch (_: Exception) { null }
+        val serverMessage = json?.optJSONObject("data")?.optString("message")?.takeIf { it.isNotBlank() }
+            ?: json?.optJSONArray("tracking_number")?.optString(0)?.takeIf { it.isNotBlank() }
+            ?: json?.optString("message")?.takeIf { it.isNotBlank() }
+
+        return when {
+            code == 401 -> ScanOutcome(StatusType.ERROR, "Session expired — not marked. Log in and scan again.", sessionExpired = true)
+            code == 403 -> ScanOutcome(StatusType.ERROR, "Your account is not allowed to mark orders as shipped.")
+            code == 422 -> ScanOutcome(StatusType.WARNING, serverMessage ?: "Tracking number not found.")
+            code == 409 || serverMessage?.contains("already", ignoreCase = true) == true ->
+                ScanOutcome(StatusType.WARNING, serverMessage ?: "This order has already been shipped.")
+            code >= 500 -> ScanOutcome(StatusType.ERROR, "Server error ($code). Not marked — try again shortly.")
+            else -> ScanOutcome(StatusType.ERROR, serverMessage ?: "Server returned $code. Not marked.")
         }
     }
 

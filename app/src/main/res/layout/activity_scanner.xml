@@ -37,7 +37,8 @@
                     android:id="@+id/tvStatus"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="READY"
+                    android:text="READY TO SCAN"
+                    android:gravity="center"
                     android:textSize="22sp"
                     android:textStyle="bold"
                     android:textColor="@color/teal_700"/>
@@ -108,7 +109,8 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:text="Scan with camera"
+                        android:text="Camera"
+                        app:icon="@android:drawable/ic_menu_camera"
                         app:cornerRadius="14dp"/>
                 </LinearLayout>
 

@@ -67,11 +67,14 @@ class ScannerActivity : ComponentActivity() {
                 updateCounterDisplay()
             }
         }
+        lifecycleScope.launch { scannerViewModel.successCount.collect { updateCounterDisplay() } }
+        lifecycleScope.launch { scannerViewModel.failureCount.collect { updateCounterDisplay() } }
 
         // Observe history
         lifecycleScope.launch {
             scannerViewModel.history.collect { history ->
-                binding.tvHistory.text = history.joinToString(separator = "\n") { it.toString() }
+                binding.tvHistory.text = if (history.isEmpty()) "No scans yet"
+                    else history.joinToString(separator = "\n\n") { it.toString() }
             }
         }
 
@@ -100,6 +103,10 @@ class ScannerActivity : ComponentActivity() {
         }
 
         binding.btnCameraScan.setOnClickListener {
+            if (!packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_CAMERA_ANY)) {
+                android.widget.Toast.makeText(this, "This device has no camera", android.widget.Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
             val options = ScanOptions()
                 .setPrompt("Point the camera at the barcode")
                 .setBeepEnabled(true)
@@ -126,23 +133,27 @@ class ScannerActivity : ComponentActivity() {
     }
 
     private fun updateStatusUI(state: com.stankovic.zebrascanner.presentation.state.ScannerUIState) {
-        binding.tvStatus.text = "Status: ${state.getDisplayMessage()}"
-        
-        val color = when (state.getStatusType()) {
-            StatusType.IDLE -> Color.DKGRAY
-            StatusType.LOADING -> Color.BLUE
-            StatusType.SUCCESS -> Color.GREEN
-            StatusType.WARNING -> Color.YELLOW
-            StatusType.ERROR -> Color.RED
+        // Big colour-coded card so the result is readable at arm's length
+        val (background, text, title) = when (state.getStatusType()) {
+            StatusType.IDLE -> Triple(Color.WHITE, Color.DKGRAY, "READY TO SCAN")
+            StatusType.LOADING -> Triple(Color.parseColor("#1565C0"), Color.WHITE, "SENDING…")
+            StatusType.SUCCESS -> Triple(Color.parseColor("#2E7D32"), Color.WHITE, "SHIPPED ✔")
+            StatusType.WARNING -> Triple(Color.parseColor("#F9A825"), Color.BLACK, "CHECK ⚠")
+            StatusType.ERROR -> Triple(Color.parseColor("#C62828"), Color.WHITE, "NOT MARKED ✖")
         }
-        binding.tvStatus.setTextColor(color)
+        binding.cardStatus.setCardBackgroundColor(background)
+        val detail = state.getDisplayMessage()
+            ?.takeIf { state.getStatusType() != StatusType.IDLE }
+        binding.tvStatus.text = if (detail != null) "$title\n$detail" else title
+        binding.tvStatus.setTextColor(text)
+        binding.tvCounts.setTextColor(text)
     }
 
     private fun updateCounterDisplay() {
         val total = scannerViewModel.totalScans.value
         val success = scannerViewModel.successCount.value
         val fail = scannerViewModel.failureCount.value
-        binding.tvCounts.text = "Scans: $total | Success: $success | Fail: $fail"
+        binding.tvCounts.text = "Scans $total  •  Shipped $success  •  Failed $fail"
     }
 
     @SuppressLint("UnspecifiedRegisterReceiverFlag")
