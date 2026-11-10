@@ -19,7 +19,7 @@ class ApiClient @Singleton constructor(
     val service: ApiService
 ) {
     companion object {
-        private const val BASE = "https://luna-api-dev.solutions-apps.com"
+        private const val BASE = "https://luna-api.solutions-apps.com"
 
         private fun createLoggingInterceptor(): HttpLoggingInterceptor {
             return HttpLoggingInterceptor { message ->

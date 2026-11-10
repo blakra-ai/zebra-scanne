@@ -89,15 +89,7 @@
         <activity
             android:name=".ScannerActivity"
             android:exported="true" />
-        <receiver
-            android:name=".scanning.ScanBroadcastReceiver"
-            android:exported="true"
-            android:permission="com.stankovic.zebrascanner.SCAN_PERMISSION">
-            <intent-filter>
-                <action android:name="com.stankovic.zebrascanner.scan" /> <!-- This has to be same as in ScanningConfig.kt -->
-                <category android:name="android.intent.category.DEFAULT" />
-            </intent-filter>
-        </receiver>
+
     </application>
 
 </manifest>

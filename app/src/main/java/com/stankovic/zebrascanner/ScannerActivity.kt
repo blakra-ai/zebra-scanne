@@ -6,6 +6,8 @@ import android.content.IntentFilter
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
+import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputMethodManager
 import androidx.activity.ComponentActivity
 import androidx.activity.viewModels
 import androidx.lifecycle.lifecycleScope
@@ -15,6 +17,8 @@ import com.stankovic.zebrascanner.databinding.ActivityScannerBinding
 import com.stankovic.zebrascanner.presentation.state.StatusType
 import com.stankovic.zebrascanner.scanning.ScanBroadcastReceiver
 import com.stankovic.zebrascanner.viewmodel.ScannerViewModel
+import com.journeyapps.barcodescanner.ScanContract
+import com.journeyapps.barcodescanner.ScanOptions
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
@@ -23,6 +27,11 @@ class ScannerActivity : ComponentActivity() {
     private lateinit var scannerReceiver: ScanBroadcastReceiver
     private var isReceiverRegistered = false
     private lateinit var binding: ActivityScannerBinding
+
+    // Camera fallback for when the hardware scanner/DataWedge isn't available
+    private val cameraScanLauncher = registerForActivityResult(ScanContract()) { result ->
+        result.contents?.let { submitTrackingNumber(it) }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -69,6 +78,39 @@ class ScannerActivity : ComponentActivity() {
         binding.btnClearHistory.setOnClickListener {
             scannerViewModel.clearHistory()
         }
+
+        binding.btnSubmitManual.setOnClickListener { submitManualEntry() }
+        binding.etManual.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == EditorInfo.IME_ACTION_DONE) {
+                submitManualEntry()
+                true
+            } else false
+        }
+
+        binding.btnCameraScan.setOnClickListener {
+            val options = ScanOptions()
+                .setPrompt("Point the camera at the barcode")
+                .setBeepEnabled(true)
+                .setOrientationLocked(false)
+            cameraScanLauncher.launch(options)
+        }
+    }
+
+    private fun submitManualEntry() {
+        val text = binding.etManual.text?.toString()?.trim().orEmpty()
+        if (text.isEmpty()) {
+            binding.tilManual.error = "Enter a tracking number"
+            return
+        }
+        binding.tilManual.error = null
+        binding.etManual.text?.clear()
+        getSystemService(InputMethodManager::class.java)
+            ?.hideSoftInputFromWindow(binding.etManual.windowToken, 0)
+        submitTrackingNumber(text)
+    }
+
+    private fun submitTrackingNumber(trackingNumber: String) {
+        scannerReceiver.submit(this, trackingNumber.trim())
     }
 
     private fun updateStatusUI(state: com.stankovic.zebrascanner.presentation.state.ScannerUIState) {

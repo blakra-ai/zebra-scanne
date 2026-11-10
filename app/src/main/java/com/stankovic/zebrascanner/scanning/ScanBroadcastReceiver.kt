@@ -29,6 +29,37 @@ class ScanBroadcastReceiver : BroadcastReceiver {
         val action = intent.action
         var tracking: String? = null
 
+        // Runtime sender validation: accept broadcasts only from DataWedge (package: com.symbol.datawedge)
+        val allowedSender = "com.symbol.datawedge"
+        var validatedSender = false
+        try {
+            // sentFromUid exists only on Android 14+ and is -1 unless the sender opts in
+            if (android.os.Build.VERSION.SDK_INT >= 34) {
+                val senderUid = sentFromUid
+                if (senderUid >= 0) {
+                    val senderPkgs = context.packageManager.getPackagesForUid(senderUid)
+                    if (senderPkgs != null && senderPkgs.contains(allowedSender)) {
+                        validatedSender = true
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.w("ScanReceiver", "Sender validation exception: ${e.message}")
+        }
+        if (!validatedSender) {
+            // Fallback checks: intent.package or known DataWedge extras (best-effort)
+            val senderPkg = intent.`package`
+            if (senderPkg == allowedSender) validatedSender = true
+            val sourceExtra = intent.getStringExtra("com.symbol.datawedge.source")
+            // DataWedge sets source to "scanner", "msr", "simulscan", etc.
+            if (!validatedSender && sourceExtra != null) validatedSender = true
+        }
+        if (!validatedSender) {
+            Log.w("ScanReceiver", "Rejected broadcast from unknown sender; possible spoofed intent.")
+            Toast.makeText(context, "Scan ignored: unknown sender", Toast.LENGTH_SHORT).show()
+            return
+        }
+
         intent?.let {
             val data = it.getStringExtra("com.symbol.datawedge.data_string")
             val labelType = it.getStringExtra("com.symbol.datawedge.label_type")
@@ -42,7 +73,12 @@ class ScanBroadcastReceiver : BroadcastReceiver {
             tracking = decodedData ?: tracking
         }
 
-        tracking?.let { tn ->
+        tracking?.let { submit(context, it) }
+    }
+
+    /** Sends a tracking number to the backend; shared by DataWedge, manual entry and camera scans. */
+    fun submit(context: Context, tn: String) {
+        run {
             // update viewmodel if available
             scannerViewModel?.updateScannedData(tn)
 
@@ -58,7 +94,11 @@ class ScanBroadcastReceiver : BroadcastReceiver {
 
                     val response = apiService.markShipped(authHeader, com.stankovic.zebrascanner.network.MarkShippedRequest(tn))
                     if (!response.isSuccessful) {
-
+                        val err = "Server returned ${response.code()}"
+                        Log.w("ScanReceiver", "$tn: $err")
+                        scannerViewModel?.incrementTotal()
+                        scannerViewModel?.updateStatus("Error: $err")
+                        withContext(Dispatchers.Main) { Toast.makeText(context, "$tn: $err", Toast.LENGTH_LONG).show() }
                         return@launch
                     }
 

@@ -18,7 +18,7 @@ android {
 
     defaultConfig {
         applicationId = "com.stankovic.zebrascanner"
-        minSdk = 23
+        minSdk = 24 // zxing-android-embedded 4.x requires API 24
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
@@ -72,6 +72,7 @@ dependencies {
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
     implementation(libs.hilt.android)
+    implementation("com.journeyapps:zxing-android-embedded:4.3.0")
     implementation(libs.androidx.hilt.navigation.compose)
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
