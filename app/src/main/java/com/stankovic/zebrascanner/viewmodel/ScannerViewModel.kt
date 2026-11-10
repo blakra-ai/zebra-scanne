@@ -114,11 +114,10 @@ class ScannerViewModel @Inject constructor(
         }
     }
 
-    @RequiresApi(Build.VERSION_CODES.VANILLA_ICE_CREAM)
     fun addHistoryEntry(entry: HistoryEntry) {
         val newList = _history.value.toMutableList()
         newList.add(0, entry)
-        if (newList.size > 50) newList.removeLast()
+        if (newList.size > 50) newList.removeAt(newList.lastIndex)
         _history.value = newList
     }
 

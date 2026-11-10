@@ -6,6 +6,8 @@ import android.content.Intent
 import android.util.Log
 import android.widget.Toast
 import com.stankovic.zebrascanner.config.ScanningConfig
+import com.stankovic.zebrascanner.presentation.state.HistoryEntry
+import com.stankovic.zebrascanner.presentation.state.StatusType
 import com.stankovic.zebrascanner.viewmodel.ScannerViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -93,15 +95,6 @@ class ScanBroadcastReceiver : BroadcastReceiver {
                     val authHeader = if (!token.isNullOrEmpty()) "Bearer $token" else null
 
                     val response = apiService.markShipped(authHeader, com.stankovic.zebrascanner.network.MarkShippedRequest(tn))
-                    if (!response.isSuccessful) {
-                        val err = "Server returned ${response.code()}"
-                        Log.w("ScanReceiver", "$tn: $err")
-                        scannerViewModel?.incrementTotal()
-                        scannerViewModel?.updateStatus("Error: $err")
-                        withContext(Dispatchers.Main) { Toast.makeText(context, "$tn: $err", Toast.LENGTH_LONG).show() }
-                        return@launch
-                    }
-
 val contentType = response.headers()["Content-Type"] ?: ""
 if (!contentType.contains("application/json")) {
     throw IllegalStateException("Non-JSON response received (likely auth redirect)")
@@ -122,7 +115,7 @@ if (!contentType.contains("application/json")) {
                         prefs.edit().putInt("success_scans", prefs.getInt("success_scans", 0) + 1).apply()
                         scannerViewModel?.incrementSuccess()
                         scannerViewModel?.updateStatus("OK: $msg")
-//                        scannerViewModel?.addHistoryEntry("$tn — OK: $msg")
+                        scannerViewModel?.addHistoryEntry(HistoryEntry(tn, StatusType.SUCCESS, msg))
                         if (scannerViewModel == null) {
                             withContext(Dispatchers.Main) { Toast.makeText(context, msg, Toast.LENGTH_LONG).show() }
                         }
@@ -141,13 +134,13 @@ if (!contentType.contains("application/json")) {
                                     prefs.edit().putInt("failure_scans", prefs.getInt("failure_scans", 0) + 1).apply()
                                     scannerViewModel?.incrementFailure()
                                     scannerViewModel?.updateStatus("Warning: $msg")
-//                                    scannerViewModel?.addHistoryEntry("$tn — Warning: $msg")
+                                    scannerViewModel?.addHistoryEntry(HistoryEntry(tn, StatusType.WARNING, msg))
                                     if (scannerViewModel == null) withContext(Dispatchers.Main) { Toast.makeText(context, msg, Toast.LENGTH_LONG).show() }
                                 } catch (e: Exception) {
                                     prefs.edit().putInt("failure_scans", prefs.getInt("failure_scans", 0) + 1).apply()
                                     scannerViewModel?.incrementFailure()
                                     scannerViewModel?.updateStatus("Warning: Validation error")
-//                                    scannerViewModel?.addHistoryEntry("$tn — Warning: Validation error")
+                                    scannerViewModel?.addHistoryEntry(HistoryEntry(tn, StatusType.WARNING, "Validation error"))
                                     if (scannerViewModel == null) withContext(Dispatchers.Main) { Toast.makeText(context, "Validation error", Toast.LENGTH_LONG).show() }
                                 }
                             }
@@ -158,7 +151,7 @@ if (!contentType.contains("application/json")) {
                                 prefs.edit().putInt("failure_scans", prefs.getInt("failure_scans", 0) + 1).apply()
                                 scannerViewModel?.incrementFailure()
                                 scannerViewModel?.updateStatus("Error: $msg")
-//                                scannerViewModel?.addHistoryEntry("$tn — Error: $msg")
+                                scannerViewModel?.addHistoryEntry(HistoryEntry(tn, StatusType.ERROR, msg))
                                 if (scannerViewModel == null) withContext(Dispatchers.Main) { Toast.makeText(context, msg, Toast.LENGTH_LONG).show() }
                             }
                             else -> {
@@ -168,7 +161,7 @@ if (!contentType.contains("application/json")) {
                                 prefs.edit().putInt("failure_scans", prefs.getInt("failure_scans", 0) + 1).apply()
                                 scannerViewModel?.incrementFailure()
                                 scannerViewModel?.updateStatus("Error: $msg")
-//                                scannerViewModel?.addHistoryEntry("$tn — Error: $msg")
+                                scannerViewModel?.addHistoryEntry(HistoryEntry(tn, StatusType.ERROR, msg))
                                 if (scannerViewModel == null) withContext(Dispatchers.Main) { Toast.makeText(context, msg, Toast.LENGTH_LONG).show() }
                             }
                         }
@@ -180,7 +173,7 @@ if (!contentType.contains("application/json")) {
                     prefs.edit().putInt("failure_scans", prefs.getInt("failure_scans", 0) + 1).apply()
                     scannerViewModel?.incrementFailure()
                     scannerViewModel?.updateStatus("Error: ${e.message}")
-//                    scannerViewModel?.addHistoryEntry("$tn — Error: ${e.message}")
+                    scannerViewModel?.addHistoryEntry(HistoryEntry(tn, StatusType.ERROR, e.message ?: "Network error"))
                     if (scannerViewModel == null) withContext(Dispatchers.Main) { Toast.makeText(context, e.message ?: "Network error", Toast.LENGTH_LONG).show() }
                 }
             }
