@@ -5,6 +5,8 @@ import android.content.Context
 import android.content.Intent
 import android.util.Log
 import android.widget.Toast
+import com.stankovic.zebrascanner.R
+import com.stankovic.zebrascanner.config.AppLanguage
 import com.stankovic.zebrascanner.config.ScanningConfig
 import com.stankovic.zebrascanner.presentation.state.HistoryEntry
 import com.stankovic.zebrascanner.presentation.state.StatusType
@@ -64,7 +66,7 @@ class ScanBroadcastReceiver : BroadcastReceiver {
         }
         if (!validatedSender) {
             Log.w("ScanReceiver", "Rejected broadcast from unknown sender; possible spoofed intent.")
-            Toast.makeText(context, "Scan ignored: unknown sender", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, AppLanguage.localized(context).getString(R.string.scan_ignored_sender), Toast.LENGTH_SHORT).show()
             return
         }
 
@@ -100,6 +102,9 @@ class ScanBroadcastReceiver : BroadcastReceiver {
         scannerViewModel?.updateScannedData(tn)
         scannerViewModel?.markProcessing(tn)
 
+        // Strings in the app language, not the phone's
+        val res = AppLanguage.localized(appContext)
+
         CoroutineScope(Dispatchers.IO).launch {
             val prefs = appContext.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
             val outcome = try {
@@ -111,7 +116,7 @@ class ScanBroadcastReceiver : BroadcastReceiver {
                     val data = response.body()?.data
                     ScanOutcome(
                         StatusType.SUCCESS,
-                        data?.get("message") as? String ?: "Packing has been marked as shipped.",
+                        data?.get("message") as? String ?: res.getString(R.string.scan_marked_default),
                         orderNumber = when (val n = data?.get("order_number")) {
                             // Gson reads JSON numbers inside Map<String, Any> as Double (123 -> 123.0)
                             is Double -> if (n % 1.0 == 0.0) n.toLong().toString() else n.toString()
@@ -120,17 +125,17 @@ class ScanBroadcastReceiver : BroadcastReceiver {
                         }
                     )
                 } else {
-                    outcomeForError(response.code(), response.errorBody()?.string())
+                    outcomeForError(res, response.code(), response.errorBody()?.string())
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: SocketTimeoutException) {
-                ScanOutcome(StatusType.ERROR, "Server did not respond in time. Check the order before scanning again.")
+                ScanOutcome(StatusType.ERROR, res.getString(R.string.scan_timeout))
             } catch (e: IOException) {
-                ScanOutcome(StatusType.ERROR, "No connection to the server. Not marked — scan again.")
+                ScanOutcome(StatusType.ERROR, res.getString(R.string.scan_no_connection))
             } catch (e: Exception) {
                 Log.e("ScanReceiver", "Unexpected error for $tn", e)
-                ScanOutcome(StatusType.ERROR, "Unexpected error: ${e.message ?: e.javaClass.simpleName}")
+                ScanOutcome(StatusType.ERROR, res.getString(R.string.scan_unexpected, e.message ?: e.javaClass.simpleName))
             }
 
             // Persist and show the result
@@ -154,7 +159,7 @@ class ScanBroadcastReceiver : BroadcastReceiver {
                 StatusType.WARNING -> "Warning"
                 else -> "Error"
             }
-            val shown = outcome.orderNumber?.let { "${outcome.message} (Order $it)" } ?: outcome.message
+            val shown = outcome.orderNumber?.let { "${outcome.message} (${res.getString(R.string.order_label, it)})" } ?: outcome.message
             scannerViewModel?.updateStatus("$label: $shown")
             scannerViewModel?.addHistoryEntry(HistoryEntry(tn, outcome.status, outcome.message, outcome.orderNumber))
 
@@ -162,7 +167,7 @@ class ScanBroadcastReceiver : BroadcastReceiver {
                 if (scannerViewModel == null) Toast.makeText(appContext, shown, Toast.LENGTH_LONG).show()
                 if (outcome.sessionExpired) {
                     prefs.edit().remove("auth_token").apply()
-                    Toast.makeText(appContext, "Session expired, please log in again", Toast.LENGTH_LONG).show()
+                    Toast.makeText(appContext, res.getString(R.string.scan_session_toast), Toast.LENGTH_LONG).show()
                     appContext.startActivity(
                         Intent(appContext, com.stankovic.zebrascanner.login_form::class.java)
                             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
@@ -185,24 +190,31 @@ class ScanBroadcastReceiver : BroadcastReceiver {
      * - validation 422: {"tracking_number":["..."]}
      * - 401/403 from Laravel: {"message":"..."}
      */
-    private fun outcomeForError(code: Int, body: String?): ScanOutcome {
+    private fun outcomeForError(res: Context, code: Int, body: String?): ScanOutcome {
         val json = try { body?.let { JSONObject(it) } } catch (_: Exception) { null }
         val serverMessage = json?.optJSONObject("data")?.optString("message")?.takeIf { it.isNotBlank() }
             ?: json?.optJSONArray("tracking_number")?.optString(0)?.takeIf { it.isNotBlank() }
             ?: json?.optString("message")?.takeIf { it.isNotBlank() }
 
         return when {
-            code == 401 -> ScanOutcome(StatusType.ERROR, "Session expired — not marked. Log in and scan again.", sessionExpired = true)
-            code == 403 -> ScanOutcome(StatusType.ERROR, "Your account is not allowed to mark orders as shipped.")
-            code == 422 -> ScanOutcome(StatusType.WARNING, serverMessage ?: "Tracking number not found.")
-            code == 409 || serverMessage?.contains("already", ignoreCase = true) == true ->
-                ScanOutcome(StatusType.WARNING, serverMessage ?: "This order has already been shipped.")
-            code >= 500 -> ScanOutcome(StatusType.ERROR, "Server error ($code). Not marked — try again shortly.")
-            else -> ScanOutcome(StatusType.ERROR, serverMessage ?: "Server returned $code. Not marked.")
+            code == 401 -> ScanOutcome(StatusType.ERROR, res.getString(R.string.scan_session_expired), sessionExpired = true)
+            code == 403 -> ScanOutcome(StatusType.ERROR, res.getString(R.string.scan_forbidden))
+            code == 422 -> ScanOutcome(StatusType.WARNING, serverMessage ?: res.getString(R.string.scan_not_found))
+            code == 409 || (serverMessage != null && serverMessage in ALREADY_SHIPPED_MESSAGES) ->
+                ScanOutcome(StatusType.WARNING, serverMessage ?: res.getString(R.string.scan_already))
+            code >= 500 -> ScanOutcome(StatusType.ERROR, res.getString(R.string.scan_server_error, code))
+            else -> ScanOutcome(StatusType.ERROR, serverMessage ?: res.getString(R.string.scan_server_returned, code))
         }
     }
 
     companion object {
+        // Backend shipping.already_shipped in each language; the backend sends it as HTTP 400, not 409
+        private val ALREADY_SHIPPED_MESSAGES = setOf(
+            "This order has already been shipped.",
+            "Diese Bestellung wurde bereits versendet.",
+            "Este pedido ya se ha enviado.",
+            "Ezt a rendelést már kiszállítottuk.",
+        )
         private const val DUPLICATE_WINDOW_MS = 2000L
         private var lastCode: String? = null
         private var lastCodeAt = 0L

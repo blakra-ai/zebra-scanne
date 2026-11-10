@@ -4,7 +4,9 @@ import android.app.Application
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
+import com.stankovic.zebrascanner.config.AppLanguage
 import com.stankovic.zebrascanner.config.ScanningConfig
+import com.stankovic.zebrascanner.network.ApiClient
 import dagger.hilt.android.HiltAndroidApp
 
 @HiltAndroidApp
@@ -15,6 +17,8 @@ class ZebraScannerApplication : Application() {
 
 	override fun onCreate() {
 		super.onCreate()
+		AppLanguage.apply(this)
+		ApiClient.language = { AppLanguage.current(this) }
 		try {
 			configureDataWedgeProfile()
 		} catch (e: Exception) {

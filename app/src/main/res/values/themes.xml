@@ -1,17 +1,44 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources xmlns:tools="http://schemas.android.com/tools">
+<resources>
 
-    <style name="Theme.FireDatabase"  parent="Theme.MaterialComponents.DayNight.NoActionBar">
-        <!-- Primary brand color. -->
-        <item name="colorPrimary">@color/purple_500</item>
-        <item name="colorPrimaryVariant">@color/purple_700</item>
+    <!-- Light-only blue theme: warehouse screens are used in bright light and must look the same on every device -->
+    <style name="Theme.FireDatabase" parent="Theme.MaterialComponents.Light.NoActionBar">
+        <item name="colorPrimary">@color/brand_blue</item>
+        <item name="colorPrimaryVariant">@color/brand_blue_dark</item>
         <item name="colorOnPrimary">@color/white</item>
-        <!-- Secondary brand color. -->
-        <item name="colorSecondary">@color/teal_200</item>
-        <item name="colorSecondaryVariant">@color/teal_700</item>
-        <item name="colorOnSecondary">@color/black</item>
-        <!-- Status bar color. -->
-        <item name="android:statusBarColor" tools:targetApi="l">?attr/colorPrimaryVariant</item>
-        <!-- Customize your theme here. -->
+        <item name="colorSecondary">@color/brand_blue</item>
+        <item name="colorSecondaryVariant">@color/brand_blue_dark</item>
+        <item name="colorOnSecondary">@color/white</item>
+        <item name="colorAccent">@color/brand_blue</item>
+        <item name="android:colorBackground">@color/background</item>
+        <item name="android:statusBarColor">@color/brand_blue_dark</item>
+        <item name="materialCardViewStyle">@style/Widget.App.Card</item>
+    </style>
+
+    <style name="Widget.App.Card" parent="Widget.MaterialComponents.CardView">
+        <item name="cardCornerRadius">16dp</item>
+        <item name="cardElevation">0dp</item>
+        <item name="strokeColor">@color/divider</item>
+        <item name="strokeWidth">1dp</item>
+    </style>
+
+    <style name="Widget.App.Pill">
+        <item name="android:background">@drawable/bg_pill</item>
+        <item name="android:backgroundTint">#757575</item>
+        <item name="android:gravity">center</item>
+        <item name="android:maxLines">1</item>
+        <item name="android:ellipsize">end</item>
+        <item name="android:paddingTop">8dp</item>
+        <item name="android:paddingBottom">8dp</item>
+        <item name="android:paddingStart">12dp</item>
+        <item name="android:paddingEnd">12dp</item>
+        <item name="android:textColor">@color/white</item>
+        <item name="android:textSize">13sp</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
+    <style name="Text.App.Label" parent="TextAppearance.MaterialComponents.Overline">
+        <item name="android:textColor">@color/text_secondary</item>
+        <item name="android:textSize">12sp</item>
     </style>
 </resources>

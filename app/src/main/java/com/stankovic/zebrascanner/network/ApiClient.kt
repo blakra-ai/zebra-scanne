@@ -22,6 +22,10 @@ class ApiClient @Singleton constructor(
     companion object {
         private const val BASE = "https://luna-api.solutions-apps.com"
 
+        /** Two-letter app language sent as X-Language so the backend answers in it; set by the Application. */
+        @Volatile
+        var language: () -> String = { "en" }
+
         private fun createLoggingInterceptor(): HttpLoggingInterceptor {
             return HttpLoggingInterceptor { message ->
                 Log.d("HTTP", message)
@@ -38,6 +42,7 @@ class ApiClient @Singleton constructor(
                 val request = original.newBuilder()
                     .header("Accept", "application/json")
                     .header("Content-Type", "application/json")
+                    .header("X-Language", language())
                     .build()
                 chain.proceed(request)
             }

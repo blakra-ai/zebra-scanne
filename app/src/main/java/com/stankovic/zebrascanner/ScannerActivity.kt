@@ -3,6 +3,7 @@ package com.stankovic.zebrascanner
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
 import android.content.res.ColorStateList
 import android.graphics.Color
 import android.net.ConnectivityManager
@@ -10,25 +11,35 @@ import android.net.Network
 import android.net.NetworkCapabilities
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
+import android.view.View
 import android.view.WindowManager
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
-import androidx.activity.ComponentActivity
+import android.widget.Toast
 import androidx.activity.viewModels
+import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
-import kotlinx.coroutines.launch
+import com.journeyapps.barcodescanner.ScanContract
+import com.journeyapps.barcodescanner.ScanOptions
+import com.stankovic.zebrascanner.config.AppLanguage
 import com.stankovic.zebrascanner.config.ScanningConfig
 import com.stankovic.zebrascanner.databinding.ActivityScannerBinding
+import com.stankovic.zebrascanner.presentation.state.HistoryEntry
+import com.stankovic.zebrascanner.presentation.state.ScannerUIState
 import com.stankovic.zebrascanner.presentation.state.StatusType
 import com.stankovic.zebrascanner.scanning.DataWedgeMonitor
 import com.stankovic.zebrascanner.scanning.ScanBroadcastReceiver
 import com.stankovic.zebrascanner.viewmodel.ScannerViewModel
-import com.journeyapps.barcodescanner.ScanContract
-import com.journeyapps.barcodescanner.ScanOptions
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
+// AppCompatActivity so an in-app language change recreates this screen on every Android version
 @AndroidEntryPoint
-class ScannerActivity : ComponentActivity() {
+class ScannerActivity : AppCompatActivity() {
     private val scannerViewModel: ScannerViewModel by viewModels()
     private lateinit var scannerReceiver: ScanBroadcastReceiver
     private var isReceiverRegistered = false
@@ -57,43 +68,26 @@ class ScannerActivity : ComponentActivity() {
     }
 
     private fun setupUI() {
-        // Observe scanned data
-        lifecycleScope.launch {
-            scannerViewModel.scannedData.collect { data ->
-                binding.tvScanned.text = data ?: "No scans yet"
-            }
-        }
+        binding.btnLanguage.text = AppLanguage.current(this)
+        binding.btnLanguage.setOnClickListener { AppLanguage.showPicker(this) }
 
-        // Observe UI state with proper color coding
         lifecycleScope.launch {
-            scannerViewModel.uiState.collect { state ->
-                updateStatusUI(state)
-            }
+            scannerViewModel.scannedData.collect { data -> binding.tvScanned.text = data ?: "—" }
         }
-
-        // Observe counters
         lifecycleScope.launch {
-            scannerViewModel.totalScans.collect { total ->
-                updateCounterDisplay()
-            }
+            scannerViewModel.uiState.collect { state -> updateStatusUI(state) }
         }
+        lifecycleScope.launch { scannerViewModel.totalScans.collect { updateCounterDisplay() } }
         lifecycleScope.launch { scannerViewModel.successCount.collect { updateCounterDisplay() } }
         lifecycleScope.launch { scannerViewModel.failureCount.collect { updateCounterDisplay() } }
-
-        // Observe history
         lifecycleScope.launch {
             scannerViewModel.history.collect { history ->
-                binding.tvHistory.text = if (history.isEmpty()) "No scans yet"
-                    else history.joinToString(separator = "\n\n") { it.toString() }
+                binding.tvHistory.text = if (history.isEmpty()) getString(R.string.no_scans)
+                    else history.joinToString(separator = "\n\n") { formatHistory(it) }
             }
         }
 
-        // Populate user info
-
-        // Clear history button
-        binding.btnClearHistory.setOnClickListener {
-            scannerViewModel.clearHistory()
-        }
+        binding.btnClearHistory.setOnClickListener { scannerViewModel.clearHistory() }
 
         binding.btnLogout.setOnClickListener {
             getSharedPreferences("app_prefs", MODE_PRIVATE).edit().remove("auth_token").apply()
@@ -113,22 +107,33 @@ class ScannerActivity : ComponentActivity() {
         }
 
         binding.btnCameraScan.setOnClickListener {
-            if (!packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_CAMERA_ANY)) {
-                android.widget.Toast.makeText(this, "This device has no camera", android.widget.Toast.LENGTH_SHORT).show()
+            if (!packageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_ANY)) {
+                Toast.makeText(this, R.string.no_camera, Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
             val options = ScanOptions()
-                .setPrompt("Point the camera at the barcode")
+                .setPrompt(getString(R.string.camera_prompt))
                 .setBeepEnabled(true)
                 .setOrientationLocked(false)
             cameraScanLauncher.launch(options)
         }
     }
 
+    private fun formatHistory(entry: HistoryEntry): String {
+        val icon = when (entry.status) {
+            StatusType.SUCCESS -> "✔"
+            StatusType.WARNING -> "⚠"
+            else -> "✖"
+        }
+        val time = SimpleDateFormat("HH:mm:ss", Locale.US).format(Date(entry.timestamp))
+        val order = entry.orderNumber?.let { "  •  " + getString(R.string.order_label, it) } ?: ""
+        return "$icon $time  ${entry.trackingNumber}$order\n    ${entry.message}"
+    }
+
     private fun submitManualEntry() {
         val text = binding.etManual.text?.toString()?.trim().orEmpty()
         if (text.isEmpty()) {
-            binding.tilManual.error = "Enter a tracking number"
+            binding.tilManual.error = getString(R.string.enter_tracking)
             return
         }
         binding.tilManual.error = null
@@ -142,30 +147,33 @@ class ScannerActivity : ComponentActivity() {
         scannerReceiver.submit(this, trackingNumber.trim())
     }
 
-    private fun updateStatusUI(state: com.stankovic.zebrascanner.presentation.state.ScannerUIState) {
+    private fun updateStatusUI(state: ScannerUIState) {
         // Big colour-coded card so the result is readable at arm's length
-        val (background, text, title) = when (state.getStatusType()) {
-            StatusType.IDLE -> Triple(Color.WHITE, Color.DKGRAY, "READY TO SCAN")
-            StatusType.LOADING -> Triple(Color.parseColor("#1565C0"), Color.WHITE, "SENDING…")
-            StatusType.SUCCESS -> Triple(Color.parseColor("#2E7D32"), Color.WHITE, "SHIPPED ✔")
-            StatusType.WARNING -> Triple(Color.parseColor("#F9A825"), Color.BLACK, "CHECK ⚠")
-            StatusType.ERROR -> Triple(Color.parseColor("#C62828"), Color.WHITE, "NOT MARKED ✖")
+        val type = state.getStatusType()
+        val (background, text, title) = when (type) {
+            StatusType.IDLE -> Triple(Color.WHITE, getColor(R.color.text_primary), R.string.status_ready)
+            StatusType.LOADING -> Triple(Color.parseColor(BLUE), Color.WHITE, R.string.status_sending)
+            StatusType.SUCCESS -> Triple(Color.parseColor(GREEN), Color.WHITE, R.string.status_shipped)
+            StatusType.WARNING -> Triple(Color.parseColor(AMBER), Color.BLACK, R.string.status_check)
+            StatusType.ERROR -> Triple(Color.parseColor(RED), Color.WHITE, R.string.status_not_marked)
         }
         binding.cardStatus.setCardBackgroundColor(background)
-        binding.progressSending.visibility =
-            if (state.getStatusType() == StatusType.LOADING) android.view.View.VISIBLE else android.view.View.GONE
+        binding.progressSending.visibility = if (type == StatusType.LOADING) View.VISIBLE else View.GONE
         val detail = state.getDisplayMessage()
-            ?.takeIf { state.getStatusType() != StatusType.IDLE }
-        binding.tvStatus.text = if (detail != null) "$title\n$detail" else title
+            ?.takeIf { type != StatusType.IDLE && type != StatusType.LOADING }
+        val titleText = getString(title)
+        binding.tvStatus.text = if (detail != null) "$titleText\n$detail" else titleText
         binding.tvStatus.setTextColor(text)
-        binding.tvCounts.setTextColor(text)
+        binding.tvCounts.setTextColor(if (type == StatusType.IDLE) getColor(R.color.text_secondary) else text)
     }
 
     private fun updateCounterDisplay() {
-        val total = scannerViewModel.totalScans.value
-        val success = scannerViewModel.successCount.value
-        val fail = scannerViewModel.failureCount.value
-        binding.tvCounts.text = "Scans $total  •  Shipped $success  •  Failed $fail"
+        binding.tvCounts.text = getString(
+            R.string.counts,
+            scannerViewModel.totalScans.value,
+            scannerViewModel.successCount.value,
+            scannerViewModel.failureCount.value
+        )
     }
 
     @SuppressLint("UnspecifiedRegisterReceiverFlag")
@@ -203,7 +211,7 @@ class ScannerActivity : ComponentActivity() {
         dataWedgeMonitor.stop()
     }
 
-    // ---------- Connection banner ----------
+    // ---------- Network pill ----------
 
     private val connectivityManager by lazy { getSystemService(ConnectivityManager::class.java) }
 
@@ -222,12 +230,30 @@ class ScannerActivity : ComponentActivity() {
     }
 
     private fun showConnection(online: Boolean) {
-        binding.tvNetwork.text = if (online) "● Online" else "● Offline"
+        binding.tvNetwork.setText(if (online) R.string.network_online else R.string.network_offline)
         binding.tvNetwork.backgroundTintList =
             ColorStateList.valueOf(Color.parseColor(if (online) GREEN else RED))
     }
 
-    // ---------- Hardware scanner (DataWedge) health ----------
+    override fun onStart() {
+        super.onStart()
+        showConnection(isOnline())
+        try {
+            connectivityManager?.registerDefaultNetworkCallback(networkCallback)
+        } catch (e: Exception) {
+            Log.w("ScannerActivity", "Network callback unavailable: ${e.message}")
+        }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        try {
+            connectivityManager?.unregisterNetworkCallback(networkCallback)
+        } catch (_: Exception) {
+        }
+    }
+
+    // ---------- Hardware scanner (DataWedge) pill ----------
 
     private fun showScannerHealth(health: DataWedgeMonitor.ScannerHealth) {
         val color = when (health.level) {
@@ -247,7 +273,7 @@ class ScannerActivity : ComponentActivity() {
             health.level == DataWedgeMonitor.Level.ERROR ||
             health.level == DataWedgeMonitor.Level.UNAVAILABLE
         binding.tvScannerDetail.text = health.detail
-        binding.tvScannerDetail.visibility = if (showDetail) android.view.View.VISIBLE else android.view.View.GONE
+        binding.tvScannerDetail.visibility = if (showDetail) View.VISIBLE else View.GONE
         lastScannerHealth = health
     }
 
@@ -259,25 +285,8 @@ class ScannerActivity : ComponentActivity() {
         dataWedgeMonitor.check()
     }
 
-    override fun onStart() {
-        super.onStart()
-        showConnection(isOnline())
-        try {
-            connectivityManager?.registerDefaultNetworkCallback(networkCallback)
-        } catch (e: Exception) {
-            android.util.Log.w("ScannerActivity", "Network callback unavailable: ${e.message}")
-        }
-    }
-
-    override fun onStop() {
-        super.onStop()
-        try {
-            connectivityManager?.unregisterNetworkCallback(networkCallback)
-        } catch (_: Exception) {
-        }
-    }
-
     private companion object {
+        const val BLUE = "#1565C0"
         const val GREEN = "#2E7D32"
         const val RED = "#C62828"
         const val AMBER = "#F9A825"
