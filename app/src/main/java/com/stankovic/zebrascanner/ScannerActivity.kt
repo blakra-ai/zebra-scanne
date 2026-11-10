@@ -4,6 +4,9 @@ import android.annotation.SuppressLint
 import android.content.Intent
 import android.content.IntentFilter
 import android.graphics.Color
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
 import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
@@ -142,6 +145,8 @@ class ScannerActivity : ComponentActivity() {
             StatusType.ERROR -> Triple(Color.parseColor("#C62828"), Color.WHITE, "NOT MARKED ✖")
         }
         binding.cardStatus.setCardBackgroundColor(background)
+        binding.progressSending.visibility =
+            if (state.getStatusType() == StatusType.LOADING) android.view.View.VISIBLE else android.view.View.GONE
         val detail = state.getDisplayMessage()
             ?.takeIf { state.getStatusType() != StatusType.IDLE }
         binding.tvStatus.text = if (detail != null) "$title\n$detail" else title
@@ -187,5 +192,51 @@ class ScannerActivity : ComponentActivity() {
     override fun onPause() {
         super.onPause()
         unregisterScannerReceiver()
+    }
+
+    // ---------- Connection banner ----------
+
+    private val connectivityManager by lazy { getSystemService(ConnectivityManager::class.java) }
+
+    private val networkCallback = object : ConnectivityManager.NetworkCallback() {
+        override fun onAvailable(network: Network) = postConnection()
+        override fun onLost(network: Network) = postConnection()
+        override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) = postConnection()
+    }
+
+    private fun postConnection() = runOnUiThread { showConnection(isOnline()) }
+
+    private fun isOnline(): Boolean {
+        val cm = connectivityManager ?: return true
+        val caps = cm.getNetworkCapabilities(cm.activeNetwork) ?: return false
+        return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+    }
+
+    private fun showConnection(online: Boolean) {
+        if (online) {
+            binding.tvConnection.text = "● Online — ready to scan"
+            binding.tvConnection.setBackgroundColor(Color.parseColor("#2E7D32"))
+        } else {
+            binding.tvConnection.text = "● No connection — scans will NOT be marked"
+            binding.tvConnection.setBackgroundColor(Color.parseColor("#C62828"))
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        showConnection(isOnline())
+        try {
+            connectivityManager?.registerDefaultNetworkCallback(networkCallback)
+        } catch (e: Exception) {
+            android.util.Log.w("ScannerActivity", "Network callback unavailable: ${e.message}")
+        }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        try {
+            connectivityManager?.unregisterNetworkCallback(networkCallback)
+        } catch (_: Exception) {
+        }
     }
 }
