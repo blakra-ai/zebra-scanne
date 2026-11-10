@@ -20,13 +20,30 @@ android {
         applicationId = "com.stankovic.zebrascanner"
         minSdk = 24 // zxing-android-embedded 4.x requires API 24
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    // One shared key so every build (local or CI) can update the previous install.
+    // Put the debug.keystore used for the build already on devices at app/keystore/debug.keystore.
+    val sharedKeystore = file("keystore/debug.keystore")
+    signingConfigs {
+        if (sharedKeystore.exists()) {
+            create("shared") {
+                storeFile = sharedKeystore
+                storePassword = "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
+            }
+        }
+    }
+
     buildTypes {
+        if (sharedKeystore.exists()) {
+            getByName("debug") { signingConfig = signingConfigs.getByName("shared") }
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(
