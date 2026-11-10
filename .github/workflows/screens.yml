@@ -18,7 +18,7 @@ jobs:
       - name: Build
         continue-on-error: true
         working-directory: ${{ matrix.p }}
-        run: chmod +x gradlew && ./gradlew assembleDebug --no-daemon 2>&1 | tail -60 | tee ../build-log.txt
+        run: chmod +x gradlew && ./gradlew assembleDebug --no-daemon 2>&1 | grep -vE "^> Task" | tail -120 | tee ../build-log.txt; test -n "$(ls app/build/outputs/apk/debug/*.apk 2>/dev/null)"
       - uses: actions/upload-artifact@v4
         with:
           name: APK-${{ matrix.p }}

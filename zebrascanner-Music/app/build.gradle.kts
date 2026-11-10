@@ -1,16 +1,13 @@
 plugins {
     alias(libs.plugins.android.application)
+    id("org.jetbrains.kotlin.android") version "2.0.21"
     alias(libs.plugins.kotlin.compose)
     id("com.google.devtools.ksp") version "2.0.21-1.0.28"
 }
 
 android {
     namespace = "com.example.zebrascanner"
-    compileSdk {
-        version = release(36) {
-            minorApiLevel = 1
-        }
-    }
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.example.zebrascanner"

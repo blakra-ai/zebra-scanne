@@ -64,8 +64,6 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.4")
 
     // Hilt
-    implementation("com.google.dagger:hilt-android:2.52")
-    implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
 
     // Retrofit
     implementation("com.squareup.retrofit2:retrofit:2.11.0")
@@ -74,8 +72,8 @@ dependencies {
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
 
     // Room
-    implementation("androidx.room:room-runtime:2.6.1")
-    implementation("androidx.room:room-ktx:2.6.1")
+    implementation("androidx.room:room-runtime:2.8.4")
+    implementation("androidx.room:room-ktx:2.8.4")
 
     // Security (EncryptedSharedPreferences)
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
@@ -104,7 +102,6 @@ dependencies {
     debugImplementation(libs.androidx.ui.test.manifest)
 
     ksp(libs.hilt.compiler)
-    ksp("androidx.room:room-compiler:2.6.1")
-    ksp("com.google.dagger:hilt-compiler:2.52")
+    ksp("androidx.room:room-compiler:2.8.4")
 
 }
