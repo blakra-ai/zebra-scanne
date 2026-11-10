@@ -22,7 +22,7 @@
         <item name="strokeWidth">1dp</item>
     </style>
 
-    <style name="Widget.App.Pill">
+    <style name="Widget.App.Pill" parent="">
         <item name="android:background">@drawable/bg_pill</item>
         <item name="android:backgroundTint">#757575</item>
         <item name="android:gravity">center</item>
