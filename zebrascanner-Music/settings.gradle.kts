@@ -20,9 +20,6 @@ pluginManagement {
         maven(url = "https://s01.oss.sonatype.org/content/repositories/snapshots/")
         maven(url = "https://maven.pkg.jetbrains.space/public/p/compose/dev")
         maven {
-            url = uri("https://maven.pkg.github.com/OWNER/REPO")
-        }
-        maven {
             url = uri("https://repo.itextsupport.com/android")
 
 
@@ -47,9 +44,6 @@ dependencyResolutionManagement {
         maven(url = "https://repository.apache.org/snapshots/")
         maven(url = "https://s01.oss.sonatype.org/content/repositories/snapshots/")
         maven(url = "https://maven.pkg.jetbrains.space/public/p/compose/dev")
-        maven {
-            url = uri("https://maven.pkg.github.com/OWNER/REPO")
-        }
 
     }
 }

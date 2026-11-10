@@ -12,7 +12,7 @@ retrofit = "2.9.0"
 okhttp = "4.12.0"
 gson = "2.10.1"
 room = "2.6.1"
-itext = "5.5.13.3"
+itext = "5.5.10"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
