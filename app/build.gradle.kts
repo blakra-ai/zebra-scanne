@@ -164,10 +164,10 @@ androidComponents {
         val env = flavorOf(variant.productFlavors, "env")
         val props = clients.getValue(client)
         val url = props.getProperty("url.$env").trim().trimEnd('/')
-        variant.buildConfigFields.put("API_BASE_URL", BuildConfigField("String", "\"$url\"", "Backend for this client/env"))
-        variant.buildConfigFields.put("CLIENT", BuildConfigField("String", "\"$client\"", null))
-        variant.buildConfigFields.put("ENVIRONMENT", BuildConfigField("String", "\"$env\"", null))
+        variant.buildConfigFields?.put("API_BASE_URL", BuildConfigField("String", "\"$url\"", "Backend for this client/env"))
+        variant.buildConfigFields?.put("CLIENT", BuildConfigField("String", "\"$client\"", null))
+        variant.buildConfigFields?.put("ENVIRONMENT", BuildConfigField("String", "\"$env\"", null))
         val name = props.getProperty("displayName", "Scanner") + if (env == "prod") "" else " ${env.uppercase()}"
-        variant.resValues.put(variant.makeResValueKey("string", "app_name"), ResValue(name, null))
+        variant.resValues?.put(variant.makeResValueKey("string", "app_name"), ResValue(name, null))
     }
 }
