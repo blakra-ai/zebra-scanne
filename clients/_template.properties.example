@@ -1,0 +1,6 @@
+# Copy to clients/<company>.properties (lowercase letters only) and fill in.
+displayName=Company Scanner
+applicationId=com.solutions.scanner.company
+url.dev=https://company-api-dev.example.com
+url.stage=https://company-api-stage.example.com
+url.prod=https://company-api.example.com

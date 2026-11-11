@@ -1,6 +1,7 @@
 package com.stankovic.zebrascanner.network
 
 import android.util.Log
+import com.stankovic.zebrascanner.BuildConfig
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -20,7 +21,8 @@ class ApiClient @Singleton constructor(
     val service: ApiService
 ) {
     companion object {
-        private const val BASE = "https://luna-api.solutions-apps.com"
+        // Set per client and environment from clients/<name>.properties
+        private val BASE = BuildConfig.API_BASE_URL
 
         /** Two-letter app language sent as X-Language so the backend answers in it; set by the Application. */
         @Volatile

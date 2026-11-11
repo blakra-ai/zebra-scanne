@@ -68,6 +68,11 @@ class ScannerActivity : AppCompatActivity() {
     }
 
     private fun setupUI() {
+        // Non-production builds get an orange bar so nobody marks real orders against a test server
+        if (BuildConfig.ENVIRONMENT != "prod") {
+            binding.topBar.setBackgroundColor(Color.parseColor("#E65100"))
+            window.statusBarColor = Color.parseColor("#BF360C")
+        }
         binding.btnLanguage.text = AppLanguage.current(this)
         binding.btnLanguage.setOnClickListener { AppLanguage.showPicker(this) }
 

@@ -1,8 +1,14 @@
-# Zebra Scanner Android app
+# Zebra Scanner Android app — one codebase, one config file per company (clients/<name>.properties)
+#
+# What gets built
+#   - Run pipeline (web) -> pick CLIENT (name or "all") and ENV (dev | stage | prod | all)
+#   - Push to master     -> dev builds of every client
+#   - Tag vX.Y.Z         -> prod builds of every client + GitLab Release
+#   - Tag <client>-vX.Y.Z -> prod build of that client + GitLab Release
+#   APKs are named <client>-<env>-<version>.apk under dist/.
 #
 # Versioning
-#   - Push a tag vX.Y.Z  -> versionName X.Y.Z, APK "zebra-scanner-X.Y.Z.apk" and a GitLab Release.
-#   - Any other pipeline -> versionName "<last tag>-dev.<pipeline>" (or 0.0.0-dev.N without tags).
+#   - Tags give versionName X.Y.Z; other pipelines "<last tag>-dev.<pipeline>" (0.0.0-dev.N without tags).
 #   - versionCode = 100 + pipeline IID, so every newer build installs over the previous one.
 #     (Updating in place also needs the same signing key: app/keystore/debug.keystore.)
 
@@ -16,6 +22,12 @@ variables:
   GRADLE_USER_HOME: "$CI_PROJECT_DIR/.gradle-home"
   GRADLE_OPTS: "-Dorg.gradle.daemon=false"
   GIT_DEPTH: "0"  # full history so git describe finds the last tag
+  CLIENT:
+    value: "all"
+    description: "Company: a name from clients/*.properties, or all"
+  ENV:
+    value: "prod"
+    description: "Environment: dev, stage, prod or all"
 
 build-apk:
   stage: build
@@ -46,8 +58,15 @@ build-apk:
     - |
       git fetch --tags --quiet || true
       if [ -n "$CI_COMMIT_TAG" ]; then
-        export APP_VERSION_NAME="${CI_COMMIT_TAG#v}"
+        # v1.2.0 -> all clients; luna-v1.2.0 -> only luna
+        case "$CI_COMMIT_TAG" in
+          v*) export CLIENT=all ;;
+          *-v*) export CLIENT="${CI_COMMIT_TAG%%-v*}" ;;
+        esac
+        export ENV=prod
+        export APP_VERSION_NAME="${CI_COMMIT_TAG##*v}"
       else
+        if [ "$CI_PIPELINE_SOURCE" = "push" ]; then export CLIENT=all ENV=dev; fi
         LAST_TAG="$(git describe --tags --abbrev=0 --match 'v[0-9]*' 2>/dev/null || echo v0.0.0)"
         export APP_VERSION_NAME="${LAST_TAG#v}-dev.${CI_PIPELINE_IID}"
       fi
@@ -55,10 +74,8 @@ build-apk:
       echo "APP_VERSION_NAME=$APP_VERSION_NAME" | tee version.env
       echo "APP_VERSION_CODE=$APP_VERSION_CODE" | tee -a version.env
   script:
-    - ./gradlew assembleDebug testDebugUnitTest --stacktrace
-    - mkdir -p dist
-    - cp app/build/outputs/apk/debug/app-debug.apk "dist/zebra-scanner-${APP_VERSION_NAME}.apk"
-    - ls -l dist
+    - echo "CLIENT=$CLIENT ENV=$ENV"
+    - bash ci/build-variants.sh
   artifacts:
     name: "zebra-scanner-${CI_COMMIT_REF_SLUG}"
     paths:
@@ -67,29 +84,32 @@ build-apk:
       dotenv: version.env
     expire_in: 90 days
   rules:
-    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
+    - if: $CI_COMMIT_TAG =~ /^([a-z]+-)?v\d+\.\d+\.\d+$/
     - if: $CI_COMMIT_BRANCH == "master"
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_PIPELINE_SOURCE == "web"
 
 release:
   stage: release
-  image: registry.gitlab.com/gitlab-org/release-cli:latest
+  # Pinned: newer images switch to glab, which fails with 404 on this self-hosted GitLab
+  image: registry.gitlab.com/gitlab-org/release-cli:v0.18.0
   tags:
     - develop
+  # APKs are already in build-apk's artifacts; a failed Release page shouldn't fail the pipeline
+  allow_failure: true
   needs:
     - job: build-apk
       artifacts: true
   rules:
-    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
+    - if: $CI_COMMIT_TAG =~ /^([a-z]+-)?v\d+\.\d+\.\d+$/
   script:
     - echo "Releasing $CI_COMMIT_TAG (versionName $APP_VERSION_NAME, versionCode $APP_VERSION_CODE)"
   release:
     tag_name: "$CI_COMMIT_TAG"
-    name: "Zebra Scanner $APP_VERSION_NAME"
+    name: "Zebra Scanner $CI_COMMIT_TAG"
     description: "Zebra Scanner $APP_VERSION_NAME (versionCode $APP_VERSION_CODE)"
     assets:
       links:
-        - name: "zebra-scanner-${APP_VERSION_NAME}.apk"
-          url: "${CI_PROJECT_URL}/-/jobs/artifacts/${CI_COMMIT_TAG}/raw/dist/zebra-scanner-${APP_VERSION_NAME}.apk?job=build-apk"
+        - name: "APKs (all clients in this release)"
+          url: "${CI_PROJECT_URL}/-/jobs/artifacts/${CI_COMMIT_TAG}/browse/dist?job=build-apk"
           link_type: package

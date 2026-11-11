@@ -1,3 +1,6 @@
+import com.android.build.api.variant.BuildConfigField
+import com.android.build.api.variant.ResValue
+import java.util.Properties
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -9,9 +12,45 @@ plugins {
     id("io.sentry.android.gradle") version "6.0.0"
 }
 
+// One clients/<name>.properties per company (see clients/_template.properties.example)
+val clients: Map<String, Properties> = rootProject.file("clients")
+    .listFiles { f -> f.extension == "properties" }
+    .orEmpty()
+    .sortedBy { it.name }
+    .associate { f -> f.nameWithoutExtension to Properties().apply { f.inputStream().use { load(it) } } }
+check(clients.isNotEmpty()) { "No client configs found in clients/*.properties" }
+
+fun flavorOf(flavors: List<Pair<String, String>>, dimension: String) = flavors.first { it.first == dimension }.second
+
 android {
     buildFeatures {
         viewBinding = true
+        buildConfig = true
+    }
+
+    // Variants: <client><Env><BuildType>, e.g. lunaProdDebug -> assembleLunaProdDebug
+    flavorDimensions += listOf("client", "env")
+    productFlavors {
+        clients.forEach { (name, props) ->
+            create(name) {
+                dimension = "client"
+                applicationId = props.getProperty("applicationId")
+            }
+        }
+        // dev and stage get their own app id so all three can be installed side by side
+        create("dev") {
+            dimension = "env"
+            applicationIdSuffix = ".dev"
+            versionNameSuffix = "-dev"
+        }
+        create("stage") {
+            dimension = "env"
+            applicationIdSuffix = ".stage"
+            versionNameSuffix = "-stage"
+        }
+        create("prod") {
+            dimension = "env"
+        }
     }
     namespace = "com.stankovic.zebrascanner"
     compileSdk = 36
@@ -111,4 +150,24 @@ dependencies {
     debugImplementation(libs.androidx.ui.test.manifest)
     ksp(libs.hilt.compiler)
 
+}
+
+androidComponents {
+    // Skip environments the client has no server address for
+    beforeVariants { variant ->
+        val client = flavorOf(variant.productFlavors, "client")
+        val env = flavorOf(variant.productFlavors, "env")
+        if (clients[client]?.getProperty("url.$env").isNullOrBlank()) variant.enable = false
+    }
+    onVariants { variant ->
+        val client = flavorOf(variant.productFlavors, "client")
+        val env = flavorOf(variant.productFlavors, "env")
+        val props = clients.getValue(client)
+        val url = props.getProperty("url.$env").trim().trimEnd('/')
+        variant.buildConfigFields.put("API_BASE_URL", BuildConfigField("String", "\"$url\"", "Backend for this client/env"))
+        variant.buildConfigFields.put("CLIENT", BuildConfigField("String", "\"$client\"", null))
+        variant.buildConfigFields.put("ENVIRONMENT", BuildConfigField("String", "\"$env\"", null))
+        val name = props.getProperty("displayName", "Scanner") + if (env == "prod") "" else " ${env.uppercase()}"
+        variant.resValues.put(variant.makeResValueKey("string", "app_name"), ResValue(name, null))
+    }
 }

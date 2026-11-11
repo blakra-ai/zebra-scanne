@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Solutions Scanner</string>
+    <!-- app_name is generated per client/environment in app/build.gradle.kts -->
     <string name="login_title">LOGIN</string>
     <string name="login_username_hint">Enter username</string>
     <string name="login_password_hint">Enter password</string>

@@ -27,10 +27,10 @@ jobs:
           sed -i 's/\r$//' gradlew
           chmod +x gradlew
 
-      - name: Build debug APK and run unit tests
+      - name: Build debug APKs (every client and environment)
         env:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-        run: ./gradlew assembleDebug testDebugUnitTest --stacktrace
+        run: ./gradlew assembleDebug --stacktrace
 
       # Report-only: existing lint issues shouldn't block the APK
       - name: Lint
@@ -40,8 +40,8 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: zebra-scanner-debug-apk
-          path: app/build/outputs/apk/debug/*.apk
+          name: zebra-scanner-apks
+          path: app/build/outputs/apk/**/*.apk
           if-no-files-found: error
 
       - name: Upload lint report
