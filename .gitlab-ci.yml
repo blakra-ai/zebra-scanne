@@ -102,6 +102,12 @@ publish-redmine:
       artifacts: true
   # The APKs stay in build-apk's artifacts either way; a Redmine problem shows here without failing the pipeline
   allow_failure: true
+  # One publish per Redmine project at a time, so two pipelines never replace each other's Nightly files
+  resource_group: redmine-$REDMINE_PROJECT
+  retry:
+    max: 1
+    when: [runner_system_failure, stuck_or_timeout_failure]
+  timeout: 30m
   rules:
     - if: $REDMINE_API_KEY == null || $REDMINE_PROJECT == null
       when: never
