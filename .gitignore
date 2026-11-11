@@ -54,3 +54,7 @@ app/src/main/assets/google_play_api_key.json
 
 # Shared debug signing key (lets new builds update the installed app)
 !app/keystore/debug.keystore
+.android-sdk/
+.gradle-home/
+dist/
+version.env

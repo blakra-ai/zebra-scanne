@@ -20,8 +20,9 @@ android {
         applicationId = "com.stankovic.zebrascanner"
         minSdk = 24 // zxing-android-embedded 4.x requires API 24
         targetSdk = 36
-        versionCode = 2
-        versionName = "1.1"
+        // CI sets these from the git tag (vX.Y.Z) and pipeline number; local builds use the defaults
+        versionCode = System.getenv("APP_VERSION_CODE")?.toIntOrNull() ?: 2
+        versionName = System.getenv("APP_VERSION_NAME") ?: "1.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
