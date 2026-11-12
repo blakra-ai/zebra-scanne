@@ -136,7 +136,7 @@ dependencies {
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.6.4")
     implementation("com.squareup.okhttp3:logging-interceptor:4.9.3")
-    implementation(platform("com.squareup.okhttp3:okhttp-bom:5.3.0"))
+    implementation(platform("com.squareup.okhttp3:okhttp-bom:5.5.1"))
 
     // define any required OkHttp artifacts without version
     implementation("com.squareup.okhttp3:okhttp")
