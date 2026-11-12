@@ -3,10 +3,13 @@
 # (Redmine and Redmine Board: project → Files / Roadmap / News; Board → Apps). Works for any app:
 # it only looks at the files in PUBLISH_DIR, named <slot>-<version>.<ext> (e.g. luna-prod-1.2.0.apk).
 #
-# Release (tag vX.Y.Z or <client>-vX.Y.Z) → a Redmine version named after the tag: files attached,
+# Several apps can share one Redmine project: every version is named "<APP_ID> <tag>" (or
+# "<APP_ID> Nightly"), and every file's description ends with the app's name.
+#
+# Release (tag X.Y.Z, vX.Y.Z or <client>-vX.Y.Z) → version "<APP_ID> <tag>": files attached,
 #   version closed (Roadmap shows it released), one News entry with the changelog, and a note on
 #   the issues of THIS project that the commits mention (#123).
-# Anything else → the "Nightly" version: each file replaces the previous build of the same slot.
+# Anything else → version "<APP_ID> Nightly": each file replaces the previous build of the same slot.
 #
 # What it never does: touch versions it did not create (only "[CI]" ones are reopened or closed),
 # delete a file it did not publish (only "Nightly" files whose description names the same slot),
@@ -19,14 +22,17 @@
 #   REDMINE_PROJECT   project identifier, e.g. zebra-scanner
 #   REDMINE_URL       default https://projects.solutions-apps.com
 #   PUBLISH_DIR       default dist
-#   APP_NAME          shown in titles, default CI_PROJECT_TITLE
+#   APP_ID            short id of the app, unique in the Redmine project, e.g. zebra-scanner
+#                     (default CI_PROJECT_NAME)
+#   APP_NAME          shown in titles and in Redmine Board, default CI_PROJECT_TITLE
 #   APP_VERSION_NAME  the version in the file names
 set -eu
 set -o pipefail 2>/dev/null || true
 
 REDMINE_URL="${REDMINE_URL:-https://projects.solutions-apps.com}"
 PUBLISH_DIR="${PUBLISH_DIR:-dist}"
-APP_NAME="${APP_NAME:-${CI_PROJECT_TITLE:-App}}"
+APP_ID="${APP_ID:-${CI_PROJECT_NAME:-}}"
+APP_NAME="${APP_NAME:-${CI_PROJECT_TITLE:-$APP_ID}}"
 TAG="${CI_COMMIT_TAG:-}"
 SHA="${CI_COMMIT_SHORT_SHA:-$(git rev-parse --short HEAD 2>/dev/null || echo unknown)}"
 CI_MARK="[CI]"          # description prefix of the versions this script owns
@@ -38,10 +44,12 @@ VERSION="${APP_VERSION_NAME:-}"
 [ -n "${REDMINE_API_KEY:-}" ] || fail "REDMINE_API_KEY is not set (GitLab → Settings → CI/CD → Variables, masked)"
 [ -n "${REDMINE_PROJECT:-}" ] || fail "REDMINE_PROJECT is not set (the Redmine project identifier)"
 for tool in curl jq git; do command -v "$tool" >/dev/null || fail "$tool is not installed"; done
-case "$TAG" in
-  ''|v[0-9]*|*-v[0-9]*) ;;
-  *) fail "tag '$TAG' is not vX.Y.Z or <client>-vX.Y.Z" ;;
-esac
+printf '%s' "$APP_ID" | grep -Eq '^[a-z0-9][a-z0-9-]*$' || fail "APP_ID '$APP_ID' must be lowercase letters, digits and dashes"
+case "$APP_NAME" in *'·'*) fail "APP_NAME must not contain '·'" ;; esac
+if [ -n "$TAG" ]; then
+  printf '%s' "$TAG" | grep -Eq '^([a-z0-9]+-)?v?[0-9]+\.[0-9]+\.[0-9]+$' \
+    || fail "tag '$TAG' is not X.Y.Z, vX.Y.Z or <client>-vX.Y.Z; nothing published"
+fi
 
 # Only regular files with the version in their name; anything else in PUBLISH_DIR is a mistake
 FILES=""
@@ -82,7 +90,7 @@ case " $modules " in *" files "*) ;; *) fail "the Files module is off in project
 echo "Redmine project: $(printf '%s' "$project" | jq -r .project.name) (#$PROJECT_ID)"
 
 # ---------- version ----------
-if [ -n "$TAG" ]; then VERSION_NAME="$TAG"; else VERSION_NAME="Nightly"; fi
+if [ -n "$TAG" ]; then VERSION_NAME="$APP_ID $TAG"; else VERSION_NAME="$APP_ID Nightly"; fi
 version=$(api GET "/projects/$PROJECT_ID/versions.json" \
   | jq -c --arg n "$VERSION_NAME" --argjson p "$PROJECT_ID" '[.versions[] | select(.name == $n and .project.id == $p)][0] // empty')
 if [ -z "$version" ]; then
@@ -128,9 +136,9 @@ for f in $FILES; do
     *) fail "upload of $name → $code: $(printf '%s' "$up" | sed '$d' | head -c 400)" ;;
   esac
 
-  # "slot · version · ext · commit sha": Redmine Board and customer links read this
+  # "slot · version · ext · commit sha · app name": Redmine Board and customer links read this
   api POST "/projects/$PROJECT_ID/files.json" "$(jq -n --arg t "$token" --arg n "$name" --argjson v "$VERSION_ID" \
-    --arg d "$slot · $VERSION · $ext · commit $SHA" \
+    --arg d "$slot · $VERSION · $ext · commit $SHA · $APP_NAME" \
     '{file: {token: $t, filename: $n, version_id: $v, description: $d}}')" >/dev/null
   echo "+ $name"
   published=$((published + 1))
@@ -151,7 +159,7 @@ if [ -z "$TAG" ]; then
 fi
 
 # ---------- release only ----------
-TITLE="$APP_NAME $VERSION_NAME"
+TITLE="$APP_NAME $TAG"
 news_exists() {
   case " $modules " in *" news "*) ;; *) return 1 ;; esac
   api GET "/projects/$PROJECT_ID/news.json?limit=100" | jq -e --arg t "$TITLE" 'any(.news[]; .title == $t)' >/dev/null
@@ -161,7 +169,7 @@ if news_exists; then
   echo "News '$TITLE' already exists: changelog and issue notes were done by an earlier run"
 else
   # The previous tag of the same kind: luna-v1.2.0 after luna-v1.1.0, v1.2.0 after v1.1.0
-  case "$TAG" in *-v[0-9]*) pattern="${TAG%%-v*}-v[0-9]*" ;; *) pattern='v[0-9]*' ;; esac
+  case "$TAG" in *-v[0-9]*) pattern="${TAG%%-v*}-v[0-9]*" ;; v*) pattern='v[0-9]*' ;; *) pattern='[0-9]*' ;; esac
   PREV=$(git describe --tags --abbrev=0 --match "$pattern" "$TAG^" 2>/dev/null || true)
   RANGE="${PREV:+$PREV..}$TAG"
   CHANGES=$(git log --no-merges --format='* %s' "$RANGE" 2>/dev/null | head -60 || true)
@@ -176,7 +184,7 @@ else
       echo "  #$id is not an issue of this project; left alone"
       continue
     fi
-    note="Released in *$APP_NAME $VERSION_NAME* (\"files\":$REDMINE_URL/projects/$REDMINE_PROJECT/files)"
+    note="Released in *$APP_NAME $TAG* (\"files\":$REDMINE_URL/projects/$REDMINE_PROJECT/files)"
     if curl -sS -f -o /dev/null --max-time 30 -X PUT "$REDMINE_URL/issues/$id.json" \
         -H "X-Redmine-API-Key: $REDMINE_API_KEY" -H 'Content-Type: application/json' \
         --data "$(jq -n --arg n "$note" '{issue: {notes: $n}}')"; then
