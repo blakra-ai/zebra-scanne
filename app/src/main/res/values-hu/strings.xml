@@ -66,4 +66,20 @@
     <string name="dw_disconnected_detail">Csatlakoztassa újra a külső szkennert.</string>
     <string name="dw_ready_title">Szkenner kész</string>
     <string name="dw_ready_detail">Nyomja meg a beolvasó gombot a megerősítéshez</string>
+
+    <!-- In-app update -->
+    <string name="update_available">Elérhető a(z) %1$s verzió</string>
+    <string name="update_button">Frissítés</string>
+    <string name="update_downloading">Letöltés… %1$d%%</string>
+    <string name="update_check">Verzió: %1$s · koppintson a frissítések kereséséhez</string>
+    <string name="update_checking">Frissítések keresése…</string>
+    <string name="update_latest">A legújabb verzió van telepítve</string>
+    <string name="update_allow">Engedélyezze, hogy ez az alkalmazás frissítéseket telepítsen, majd koppintson újra a Frissítés gombra</string>
+    <string name="update_err_network">Nincs kapcsolat a frissítési szerverrel. Próbálja újra később.</string>
+    <string name="update_err_damaged">A letöltés sérült. Próbálja újra.</string>
+    <string name="update_err_wrong_app">A fájl nem ennek az alkalmazásnak a frissítése.</string>
+    <string name="update_err_not_newer">Ez a verzió már telepítve van.</string>
+    <string name="update_err_signature">Ez a frissítés más kulccsal van aláírva. Távolítsa el egyszer az alkalmazást, majd telepítse újra.</string>
+    <string name="update_err_space">Nincs elég tárhely a frissítéshez.</string>
+    <string name="version_only">Verzió: %1$s</string>
 </resources>

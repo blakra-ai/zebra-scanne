@@ -66,4 +66,20 @@
     <string name="dw_disconnected_detail">Externen Scanner erneut verbinden.</string>
     <string name="dw_ready_title">Scanner bereit</string>
     <string name="dw_ready_detail">Zum Bestätigen Scan-Taste drücken</string>
+
+    <!-- In-app update -->
+    <string name="update_available">Version %1$s ist verfügbar</string>
+    <string name="update_button">Aktualisieren</string>
+    <string name="update_downloading">Wird geladen… %1$d%%</string>
+    <string name="update_check">Version %1$s · tippen, um nach Updates zu suchen</string>
+    <string name="update_checking">Suche nach Updates…</string>
+    <string name="update_latest">Sie haben die neueste Version</string>
+    <string name="update_allow">Erlauben Sie dieser App, Updates zu installieren, und tippen Sie dann erneut auf Aktualisieren</string>
+    <string name="update_err_network">Keine Verbindung zum Update-Server. Bitte später erneut versuchen.</string>
+    <string name="update_err_damaged">Der Download war beschädigt. Bitte erneut versuchen.</string>
+    <string name="update_err_wrong_app">Die Datei ist kein Update für diese App.</string>
+    <string name="update_err_not_newer">Diese Version ist bereits installiert.</string>
+    <string name="update_err_signature">Dieses Update ist mit einem anderen Schlüssel signiert. Deinstallieren Sie die App einmal und installieren Sie sie neu.</string>
+    <string name="update_err_space">Nicht genug Speicher für das Update.</string>
+    <string name="version_only">Version %1$s</string>
 </resources>

@@ -11,6 +11,7 @@ import android.net.Network
 import android.net.NetworkCapabilities
 import android.os.Build
 import android.os.Bundle
+import android.os.SystemClock
 import android.util.Log
 import android.view.View
 import android.view.WindowManager
@@ -30,9 +31,11 @@ import com.stankovic.zebrascanner.presentation.state.ScannerUIState
 import com.stankovic.zebrascanner.presentation.state.StatusType
 import com.stankovic.zebrascanner.scanning.DataWedgeMonitor
 import com.stankovic.zebrascanner.scanning.ScanBroadcastReceiver
+import com.stankovic.zebrascanner.update.AppUpdater
 import com.stankovic.zebrascanner.viewmodel.ScannerViewModel
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -46,6 +49,12 @@ class ScannerActivity : AppCompatActivity() {
     private lateinit var binding: ActivityScannerBinding
     private lateinit var dataWedgeMonitor: DataWedgeMonitor
     private var lastScannerHealth: DataWedgeMonitor.ScannerHealth? = null
+
+    // In-app update state (update/AppUpdater.kt)
+    private var pendingUpdate: AppUpdater.Update? = null
+    private var downloadedApk: File? = null
+    private var updating = false
+    private var lastUpdateCheck = 0L
 
     // Camera fallback for when the hardware scanner/DataWedge isn't available
     private val cameraScanLauncher = registerForActivityResult(ScanContract()) { result ->
@@ -65,6 +74,7 @@ class ScannerActivity : AppCompatActivity() {
         binding.tvScannerHealth.setOnClickListener { onScannerHealthTapped() }
 
         setupUI()
+        setupUpdates()
     }
 
     private fun setupUI() {
@@ -208,6 +218,10 @@ class ScannerActivity : AppCompatActivity() {
         super.onResume()
         registerScannerReceiver()
         dataWedgeMonitor.start()
+        // Quietly, at most once an hour: a shift keeps the app open for hours
+        if (SystemClock.elapsedRealtime() - lastUpdateCheck > UPDATE_CHECK_INTERVAL_MS || lastUpdateCheck == 0L) {
+            checkForUpdate(manual = false)
+        }
     }
 
     override fun onPause() {
@@ -215,6 +229,86 @@ class ScannerActivity : AppCompatActivity() {
         unregisterScannerReceiver()
         dataWedgeMonitor.stop()
     }
+
+    // ---------- In-app update ----------
+
+    private fun setupUpdates() {
+        val version = BuildConfig.VERSION_NAME
+        if (!AppUpdater.isConfigured) {
+            binding.tvVersion.text = getString(R.string.version_only, version)
+            return
+        }
+        binding.tvVersion.text = getString(R.string.update_check, version)
+        binding.tvVersion.setOnClickListener { checkForUpdate(manual = true) }
+        binding.btnUpdate.setOnClickListener { startUpdate() }
+    }
+
+    private fun checkForUpdate(manual: Boolean) {
+        if (!AppUpdater.isConfigured || updating) return
+        lastUpdateCheck = SystemClock.elapsedRealtime()
+        if (manual) binding.tvVersion.setText(R.string.update_checking)
+        lifecycleScope.launch {
+            val result = runCatching { AppUpdater.check() }
+            binding.tvVersion.text = getString(R.string.update_check, BuildConfig.VERSION_NAME)
+            result.onSuccess { update ->
+                showUpdate(update)
+                if (manual && update == null) toast(R.string.update_latest)
+            }.onFailure { error ->
+                Log.w(TAG, "Update check failed", error)
+                if (manual) toast(R.string.update_err_network)
+            }
+        }
+    }
+
+    private fun showUpdate(update: AppUpdater.Update?) {
+        if (update?.fileId != pendingUpdate?.fileId) downloadedApk = null
+        pendingUpdate = update
+        binding.cardUpdate.visibility = if (update != null) View.VISIBLE else View.GONE
+        if (update != null) binding.tvUpdate.text = getString(R.string.update_available, update.version)
+    }
+
+    private fun startUpdate() {
+        val update = pendingUpdate ?: return
+        if (updating) return
+        // Already downloaded and checked (e.g. back from allowing installs in Settings)
+        downloadedApk?.takeIf { it.exists() }?.let { apk ->
+            if (!AppUpdater.install(this, apk)) toast(R.string.update_allow, long = true)
+            return
+        }
+        updating = true
+        binding.btnUpdate.isEnabled = false
+        lifecycleScope.launch {
+            try {
+                val apk = AppUpdater.download(applicationContext, update) { percent ->
+                    runOnUiThread { binding.btnUpdate.text = getString(R.string.update_downloading, percent) }
+                }
+                downloadedApk = apk
+                if (!AppUpdater.install(this@ScannerActivity, apk)) toast(R.string.update_allow, long = true)
+            } catch (e: AppUpdater.UpdateException) {
+                Log.w(TAG, "Update failed: ${e.failure}", e)
+                toast(updateMessage(e.failure), long = true)
+            } catch (e: Exception) {
+                Log.w(TAG, "Update failed", e)
+                toast(R.string.update_err_network, long = true)
+            } finally {
+                updating = false
+                binding.btnUpdate.isEnabled = true
+                binding.btnUpdate.setText(R.string.update_button)
+            }
+        }
+    }
+
+    private fun updateMessage(failure: AppUpdater.Failure) = when (failure) {
+        AppUpdater.Failure.NETWORK -> R.string.update_err_network
+        AppUpdater.Failure.DAMAGED -> R.string.update_err_damaged
+        AppUpdater.Failure.WRONG_APP -> R.string.update_err_wrong_app
+        AppUpdater.Failure.NOT_NEWER -> R.string.update_err_not_newer
+        AppUpdater.Failure.OTHER_SIGNATURE -> R.string.update_err_signature
+        AppUpdater.Failure.NO_SPACE -> R.string.update_err_space
+    }
+
+    private fun toast(message: Int, long: Boolean = false) =
+        Toast.makeText(this, message, if (long) Toast.LENGTH_LONG else Toast.LENGTH_SHORT).show()
 
     // ---------- Network pill ----------
 
@@ -296,5 +390,7 @@ class ScannerActivity : AppCompatActivity() {
         const val RED = "#C62828"
         const val AMBER = "#F9A825"
         const val GREY = "#757575"
+        const val TAG = "ScannerActivity"
+        const val UPDATE_CHECK_INTERVAL_MS = 60 * 60 * 1000L
     }
 }

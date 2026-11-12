@@ -4,3 +4,6 @@ applicationId=com.solutions.scanner.company
 url.dev=https://company-api-dev.example.com
 url.stage=https://company-api-stage.example.com
 url.prod=https://company-api.example.com
+# Redmine project for this company's builds (in-app updates); leave out to build without updates
+updates.project=company-redmine-identifier
+# updates.redmine=https://projects.solutions-apps.com

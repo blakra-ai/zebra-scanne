@@ -6,8 +6,13 @@
 #   - Tag vX.Y.Z         -> prod builds of every client + GitLab Release
 #   - Tag <client>-vX.Y.Z -> prod build of that client + GitLab Release
 #   APKs are named <client>-<env>-<version>.apk under dist/.
-#   Every build is also published to Redmine (ci/redmine-publish.sh): tags as a released version,
-#   branch pushes as "Nightly". Set REDMINE_API_KEY (masked) and REDMINE_PROJECT in CI/CD variables.
+#   Every build is also published to Redmine by the shared script of solutions/ci-templates
+#   (redmine-publish.sh, see its README): tags as a release waiting for approval, branch pushes as
+#   "Nightly". Needs REDMINE_API_KEY (masked) and REDMINE_PROJECT in CI/CD variables.
+#
+# In-app updates
+#   - UPDATE_API_KEY (masked; or UPDATE_API_KEY_<CLIENT>): a download-only Redmine account's key,
+#     built into the app so devices update from approved releases. Without it there is no update button.
 #
 # Versioning
 #   - Tags give versionName X.Y.Z; other pipelines "<last tag>-dev.<pipeline>" (0.0.0-dev.N without tags).
@@ -108,6 +113,11 @@ publish-redmine:
     max: 1
     when: [runner_system_failure, stuck_or_timeout_failure]
   timeout: 30m
+  variables:
+    GIT_DEPTH: "0"            # release notes need the previous tag
+    CI_TEMPLATES_REF: v1.0.0  # version of solutions/ci-templates
+    APP_ID: zebra-scanner
+    APP_NAME: "Zebra Scanner"
   rules:
     - if: $REDMINE_API_KEY == null || $REDMINE_PROJECT == null
       when: never
@@ -117,7 +127,16 @@ publish-redmine:
   script:
     - apk add --no-cache -q curl jq git
     - git config --global --add safe.directory "$CI_PROJECT_DIR"
-    - APP_ID=zebra-scanner APP_NAME="Zebra Scanner" sh ci/redmine-publish.sh
+    - >
+      curl -fsS --retry 3 -H "JOB-TOKEN: $CI_JOB_TOKEN" -o /tmp/redmine-publish.sh
+      "$CI_API_V4_URL/projects/solutions%2Fci-templates/repository/files/redmine-publish.sh/raw?ref=$CI_TEMPLATES_REF"
+      || { echo "Cannot read solutions/ci-templates: add this project under ci-templates → Settings → CI/CD → Job token permissions"; exit 1; }
+    - sh /tmp/redmine-publish.sh   # APP_VERSION_NAME comes from build-apk (version.env)
+  artifacts:
+    when: always
+    paths:
+      - release-notes-*.textile
+    expire_in: 90 days
 
 release:
   stage: release

@@ -60,6 +60,43 @@
             android:orientation="vertical"
             android:padding="16dp">
 
+            <!-- UPDATE: shown only when an approved newer version exists -->
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/cardUpdate"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="12dp"
+                android:visibility="gone"
+                app:cardBackgroundColor="@color/brand_blue">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:padding="12dp">
+
+                    <TextView
+                        android:id="@+id/tvUpdate"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:textColor="@color/white"
+                        android:textSize="15sp"
+                        android:textStyle="bold"/>
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnUpdate"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:backgroundTint="@color/white"
+                        android:text="@string/update_button"
+                        android:textAllCaps="false"
+                        android:textColor="@color/brand_blue"
+                        app:cornerRadius="12dp"/>
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
             <!-- HEALTH: network + hardware scanner -->
             <LinearLayout
                 android:id="@+id/rowHealth"
@@ -292,6 +329,18 @@
                         android:textSize="14sp"/>
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
+
+            <!-- VERSION: tap to check for updates -->
+            <TextView
+                android:id="@+id/tvVersion"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:background="?attr/selectableItemBackground"
+                android:gravity="center"
+                android:padding="8dp"
+                android:textColor="@color/text_secondary"
+                android:textSize="12sp"/>
 
         </LinearLayout>
     </androidx.core.widget.NestedScrollView>

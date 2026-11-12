@@ -66,4 +66,20 @@
     <string name="dw_disconnected_detail">Vuelve a conectar el escáner externo.</string>
     <string name="dw_ready_title">Escáner listo</string>
     <string name="dw_ready_detail">Pulsa el botón de escaneo para confirmar</string>
+
+    <!-- In-app update -->
+    <string name="update_available">La versión %1$s está disponible</string>
+    <string name="update_button">Actualizar</string>
+    <string name="update_downloading">Descargando… %1$d%%</string>
+    <string name="update_check">Versión %1$s · toca para buscar actualizaciones</string>
+    <string name="update_checking">Buscando actualizaciones…</string>
+    <string name="update_latest">Tienes la versión más reciente</string>
+    <string name="update_allow">Permite que esta app instale actualizaciones y vuelve a tocar Actualizar</string>
+    <string name="update_err_network">Sin conexión con el servidor de actualizaciones. Inténtalo más tarde.</string>
+    <string name="update_err_damaged">La descarga está dañada. Inténtalo de nuevo.</string>
+    <string name="update_err_wrong_app">El archivo no es una actualización de esta app.</string>
+    <string name="update_err_not_newer">Esta versión ya está instalada.</string>
+    <string name="update_err_signature">Esta actualización está firmada con otra clave. Desinstala la app una vez e instálala de nuevo.</string>
+    <string name="update_err_space">No hay espacio suficiente para la actualización.</string>
+    <string name="version_only">Versión %1$s</string>
 </resources>

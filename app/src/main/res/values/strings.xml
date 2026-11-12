@@ -66,4 +66,20 @@
     <string name="dw_disconnected_detail">Reconnect the external scanner.</string>
     <string name="dw_ready_title">Scanner ready</string>
     <string name="dw_ready_detail">Press the scan button to confirm</string>
+
+    <!-- In-app update -->
+    <string name="update_available">Version %1$s is available</string>
+    <string name="update_button">Update</string>
+    <string name="update_downloading">Downloading… %1$d%%</string>
+    <string name="update_check">Version %1$s · tap to check for updates</string>
+    <string name="update_checking">Checking for updates…</string>
+    <string name="update_latest">You have the latest version</string>
+    <string name="update_allow">Allow this app to install updates, then tap Update again</string>
+    <string name="update_err_network">No connection to the update server. Try again later.</string>
+    <string name="update_err_damaged">The download was damaged. Try again.</string>
+    <string name="update_err_wrong_app">The file is not an update for this app.</string>
+    <string name="update_err_not_newer">This version is already installed.</string>
+    <string name="update_err_signature">This update is signed with a different key. Uninstall the app once, then install it again.</string>
+    <string name="update_err_space">Not enough storage for the update.</string>
+    <string name="version_only">Version %1$s</string>
 </resources>

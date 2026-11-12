@@ -167,6 +167,16 @@ androidComponents {
         variant.buildConfigFields?.put("API_BASE_URL", BuildConfigField("String", "\"$url\"", "Backend for this client/env"))
         variant.buildConfigFields?.put("CLIENT", BuildConfigField("String", "\"$client\"", null))
         variant.buildConfigFields?.put("ENVIRONMENT", BuildConfigField("String", "\"$env\"", null))
+        // In-app updates from the client's Redmine project (update/AppUpdater.kt). The key is a
+        // download-only Redmine account's, given by CI (UPDATE_API_KEY_<CLIENT> or UPDATE_API_KEY)
+        // and never stored in the repository; without one the app has no update button.
+        val updateProject = props.getProperty("updates.project", "").trim()
+        val updateKey = (System.getenv("UPDATE_API_KEY_${client.uppercase()}") ?: System.getenv("UPDATE_API_KEY") ?: "").trim()
+            .takeIf { updateProject.isNotEmpty() && it.matches(Regex("[0-9a-fA-F]{40}")) } ?: ""
+        val redmine = props.getProperty("updates.redmine", "https://projects.solutions-apps.com").trim().trimEnd('/')
+        variant.buildConfigFields?.put("UPDATE_REDMINE_URL", BuildConfigField("String", "\"$redmine\"", null))
+        variant.buildConfigFields?.put("UPDATE_PROJECT", BuildConfigField("String", "\"$updateProject\"", null))
+        variant.buildConfigFields?.put("UPDATE_KEY", BuildConfigField("String", "\"$updateKey\"", null))
         val name = props.getProperty("displayName", "Scanner") + if (env == "prod") "" else " ${env.uppercase()}"
         variant.resValues?.put(variant.makeResValueKey("string", "app_name"), ResValue(name, null))
     }
